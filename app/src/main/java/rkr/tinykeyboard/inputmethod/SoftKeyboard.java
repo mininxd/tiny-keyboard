@@ -216,7 +216,7 @@ public class SoftKeyboard extends InputMethodService
         }
         
         Keyboard currentKeyboard = mInputView.getKeyboard();
-        if (mQwertyKeyboard == currentKeyboard) {
+        if (currentKeyboard == mQwertyKeyboard) {
             // Alphabet keyboard
             checkToggleCapsLock();
             mInputView.setShifted(mCapsLock || !mInputView.isShifted());
@@ -261,7 +261,7 @@ public class SoftKeyboard extends InputMethodService
 
     private void checkToggleCapsLock() {
         long now = System.currentTimeMillis();
-        if (mLastShiftTime + 800 > now) {
+        if (mLastShiftTime + 500 > now || mCapsLock) {
             mCapsLock = !mCapsLock;
             mLastShiftTime = 0;
         } else {
