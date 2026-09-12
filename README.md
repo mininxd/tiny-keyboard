@@ -13,12 +13,12 @@
 ## Features
 
 - **Material 3 UI**: Clean, rounded key cards with native state feedback and zero legacy text shadows.
-- **Theme Selection**: Choose between **Legacy** (classic AOSP style), **Light**, **Dark**, or **Auto** (follows system dark mode) themes.
+- **Theme Selection**: Choose between **Legacy** (classic AOSP style, default), **Auto** (follows system dark mode), **Light**, or **Dark** themes.
 - **Auto & Adjustable Height**: Automatically scales proportionally to the display size (`8%p` per row in portrait, `13%p` in landscape).
-- **Haptic Feedback & Power Slider**: Subtle tactile feedback on keypress with adjustable strength slider (1% – 100%) and instant tactile preview.
+- **Haptic Feedback & Duration Slider**: Subtle tactile feedback on keypress with adjustable duration slider (5ms – 100ms) and instant tactile preview.
 - **High Contrast & Depth**: Toggle 3D key depth effects with elevated bottom shadow lips and high-contrast keycard borders.
 - **Gboard-Style Symbols**: Muscle-memory layout matching standard Gboard positions for `?`, `!`, `"`, `'`, `:`, `;`, `*`, `(`, `)`, etc.
-- **Quick Settings Dialog**: Hold the `.` (dot) key to display a floating settings hint popup, then slide upward to access the in-keyboard settings menu to toggle haptics & feedback power, toggle high contrast & depth, adjust keyboard height (70% – 130%), and pick your theme.
+- **Quick Settings Dialog**: Hold the `.` (dot) key to display a floating settings hint popup, then slide upward to access the in-keyboard settings menu to toggle haptics & vibration duration, toggle high contrast & depth, adjust keyboard height (70% – 130%), and pick your theme.
 
 ## How it's made
 
