@@ -1,9 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Material 3 Dark Colors -->
-    <color name="m3_keyboard_background">#1B1B1F</color>
-    <color name="m3_key_background">#2B2D31</color>
-    <color name="m3_key_background_pressed">#45474E</color>
-    <color name="m3_key_background_active">#004A77</color>
+    <color name="m3_keyboard_background">#121316</color>
+    <color name="m3_key_background">#26282E</color>
+    <color name="m3_key_background_pressed">#40434C</color>
+    <color name="m3_key_background_active">#004D7D</color>
     <color name="m3_key_text_color">#E3E3E8</color>
+
+    <!-- High Contrast & Depth Colors -->
+    <color name="key_depth_surface">#2D3036</color>
+    <color name="key_depth_shadow">#0B0C0E</color>
+    <color name="key_depth_shadow_active">#00253D</color>
+    <color name="key_depth_stroke">#444752</color>
+    <color name="m3_key_text_contrast">#FFFFFF</color>
 </resources>

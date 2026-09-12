@@ -28,6 +28,8 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
@@ -54,18 +56,23 @@ public class SoftKeyboard extends InputMethodService
 
     private static final String PREFS_NAME = "tiny_keyboard_prefs";
     private static final String PREF_HAPTIC = "haptic_feedback";
+    private static final String PREF_VIBRATE_POWER = "vibrate_power";
+    private static final String PREF_HIGH_CONTRAST = "high_contrast";
     private static final String PREF_HEIGHT_SCALE = "height_scale";
     private static final String PREF_THEME = "keyboard_theme";
 
     private InputMethodManager mInputMethodManager;
     private KeyboardView mInputView;
     private android.graphics.Insets mInsets;
+    private Vibrator mVibrator;
 
     private int mLastDisplayWidth;
     private int mLastDisplayHeight;
     private boolean mCapsLock;
     private long mLastShiftTime;
     private boolean mHapticEnabled = true;
+    private int mVibratePower = 50;
+    private boolean mHighContrast = true;
     private int mLastPressedKey = 0;
     
     private LatinKeyboard mSymbolsKeyboard;
@@ -80,8 +87,11 @@ public class SoftKeyboard extends InputMethodService
     @Override public void onCreate() {
         super.onCreate();
         mInputMethodManager = (InputMethodManager)getSystemService(INPUT_METHOD_SERVICE);
+        mVibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         mHapticEnabled = prefs.getBoolean(PREF_HAPTIC, true);
+        mVibratePower = prefs.getInt(PREF_VIBRATE_POWER, 50);
+        mHighContrast = prefs.getBoolean(PREF_HIGH_CONTRAST, true);
     }
 
     private float getHeightScale() {
@@ -156,9 +166,19 @@ public class SoftKeyboard extends InputMethodService
 
     @Override public View onCreateInputView() {
         Context context = getThemedContext();
-        String theme = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                .getString(PREF_THEME, "auto");
-        int layoutRes = "legacy".equals(theme) ? R.layout.input_legacy : R.layout.input;
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        String theme = prefs.getString(PREF_THEME, "auto");
+        boolean highContrast = prefs.getBoolean(PREF_HIGH_CONTRAST, true);
+
+        int layoutRes;
+        if ("legacy".equals(theme)) {
+            layoutRes = R.layout.input_legacy;
+        } else if (highContrast) {
+            layoutRes = R.layout.input_contrast;
+        } else {
+            layoutRes = R.layout.input;
+        }
+
         mInputView = (KeyboardView) LayoutInflater.from(context).inflate(layoutRes, null);
         mInputView.setOnKeyboardActionListener(this);
         mInputView.setPreviewEnabled(false);
@@ -403,6 +423,42 @@ public class SoftKeyboard extends InputMethodService
             showSettingsDialog();
         }
     }
+
+    private void vibrate(int power) {
+        if (!mHapticEnabled || power <= 0) return;
+        if (mVibrator == null || !mVibrator.hasVibrator()) {
+            if (mInputView != null) {
+                mInputView.performHapticFeedback(
+                    HapticFeedbackConstants.KEYBOARD_TAP,
+                    HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING
+                );
+            }
+            return;
+        }
+
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                if (mVibrator.hasAmplitudeControl()) {
+                    int amplitude = Math.max(1, Math.min(255, (int) (power * 255.0f / 100.0f)));
+                    long duration = 15 + (long) (power * 20.0f / 100.0f);
+                    mVibrator.vibrate(VibrationEffect.createOneShot(duration, amplitude));
+                } else {
+                    long duration = Math.max(1, (long) (power * 50.0f / 100.0f));
+                    mVibrator.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE));
+                }
+            } else {
+                long duration = Math.max(1, (long) (power * 50.0f / 100.0f));
+                mVibrator.vibrate(duration);
+            }
+        } catch (Exception e) {
+            if (mInputView != null) {
+                mInputView.performHapticFeedback(
+                    HapticFeedbackConstants.KEYBOARD_TAP,
+                    HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING
+                );
+            }
+        }
+    }
     
     public void onPress(int primaryCode) {
         mLastPressedKey = primaryCode;
@@ -411,12 +467,7 @@ public class SoftKeyboard extends InputMethodService
             mShowDotPopupRunnable = () -> showDotPopup();
             mHandler.postDelayed(mShowDotPopupRunnable, 300);
         }
-        if (mHapticEnabled && mInputView != null) {
-            mInputView.performHapticFeedback(
-                HapticFeedbackConstants.KEYBOARD_TAP,
-                HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING
-            );
-        }
+        vibrate(mVibratePower);
     }
     
     public void onRelease(int primaryCode) {
@@ -510,12 +561,7 @@ public class SoftKeyboard extends InputMethodService
 
         try {
             mDotPopup.showAtLocation(mInputView, Gravity.NO_GRAVITY, posX, posY);
-            if (mHapticEnabled) {
-                mInputView.performHapticFeedback(
-                    HapticFeedbackConstants.KEYBOARD_TAP,
-                    HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING
-                );
-            }
+            vibrate(mVibratePower);
         } catch (Exception ignored) {}
     }
 
@@ -537,6 +583,8 @@ public class SoftKeyboard extends InputMethodService
 
         final SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         boolean currentHaptic = prefs.getBoolean(PREF_HAPTIC, true);
+        int currentVibratePower = prefs.getInt(PREF_VIBRATE_POWER, 50);
+        boolean currentHighContrast = prefs.getBoolean(PREF_HIGH_CONTRAST, true);
         int currentHeight = prefs.getInt(PREF_HEIGHT_SCALE, 100);
         final String currentTheme = prefs.getString(PREF_THEME, "auto");
 
@@ -555,6 +603,43 @@ public class SoftKeyboard extends InputMethodService
         hapticCheck.setText("Haptic feedback");
         hapticCheck.setChecked(currentHaptic);
         layout.addView(hapticCheck);
+
+        final TextView vibrateLabel = new TextView(context);
+        vibrateLabel.setText("Feedback power: " + currentVibratePower + "%");
+        vibrateLabel.setPadding(0, pad / 4, 0, pad / 4);
+        layout.addView(vibrateLabel);
+
+        final SeekBar vibrateBar = new SeekBar(context);
+        vibrateBar.setMax(99); // 1% to 100%
+        vibrateBar.setProgress(currentVibratePower - 1);
+        vibrateBar.setEnabled(currentHaptic);
+        vibrateBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                int p = progress + 1;
+                vibrateLabel.setText("Feedback power: " + p + "%");
+                if (fromUser && hapticCheck.isChecked()) {
+                    vibrate(p);
+                }
+            }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+        layout.addView(vibrateBar);
+
+        hapticCheck.setOnCheckedChangeListener((btn, isChecked) -> {
+            vibrateBar.setEnabled(isChecked);
+            vibrateLabel.setAlpha(isChecked ? 1.0f : 0.5f);
+        });
+        if (!currentHaptic) {
+            vibrateLabel.setAlpha(0.5f);
+        }
+
+        final CheckBox contrastCheck = new CheckBox(context);
+        contrastCheck.setText("High contrast");
+        contrastCheck.setChecked(currentHighContrast);
+        contrastCheck.setPadding(0, pad / 4, 0, pad / 4);
+        layout.addView(contrastCheck);
 
         final TextView themeLabel = new TextView(context);
         themeLabel.setText("Theme");
@@ -616,6 +701,8 @@ public class SoftKeyboard extends InputMethodService
         builder.setView(scrollView);
         builder.setPositiveButton("OK", (dialog, which) -> {
             boolean haptic = hapticCheck.isChecked();
+            int vibratePower = 1 + vibrateBar.getProgress();
+            boolean highContrast = contrastCheck.isChecked();
             int height = 70 + heightBar.getProgress();
             int checkedThemeId = themeGroup.getCheckedRadioButtonId();
             String selectedTheme = "auto";
@@ -631,10 +718,14 @@ public class SoftKeyboard extends InputMethodService
 
             prefs.edit()
                 .putBoolean(PREF_HAPTIC, haptic)
+                .putInt(PREF_VIBRATE_POWER, vibratePower)
+                .putBoolean(PREF_HIGH_CONTRAST, highContrast)
                 .putInt(PREF_HEIGHT_SCALE, height)
                 .putString(PREF_THEME, selectedTheme)
                 .apply();
             mHapticEnabled = haptic;
+            mVibratePower = vibratePower;
+            mHighContrast = highContrast;
             mLastDisplayWidth = 0;
             mLastDisplayHeight = 0;
             onInitializeInterface();

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:insetLeft="2dp"
+    android:insetRight="2dp"
+    android:insetTop="3dp"
+    android:insetBottom="3dp">
+    <selector>
+        <!-- Pressed state: visually pushed down into keybed -->
+        <item android:state_pressed="true">
+            <shape android:shape="rectangle">
+                <corners android:radius="@dimen/key_corner_radius" />
+                <solid android:color="@color/m3_key_background_pressed" />
+                <stroke android:width="1dp" android:color="@color/key_depth_stroke" />
+            </shape>
+        </item>
+        <!-- Checked/Active state -->
+        <item android:state_checked="true">
+            <layer-list>
+                <!-- Bottom shadow/lip layer -->
+                <item>
+                    <shape android:shape="rectangle">
+                        <corners android:radius="@dimen/key_corner_radius" />
+                        <solid android:color="@color/key_depth_shadow_active" />
+                    </shape>
+                </item>
+                <!-- Top keycap face layer -->
+                <item android:bottom="2dp">
+                    <shape android:shape="rectangle">
+                        <corners android:radius="@dimen/key_corner_radius" />
+                        <solid android:color="@color/m3_key_background_active" />
+                        <stroke android:width="1dp" android:color="@color/key_depth_stroke" />
+                    </shape>
+                </item>
+            </layer-list>
+        </item>
+        <!-- Normal resting state: 3D elevated key with high contrast border and bottom shadow -->
+        <item>
+            <layer-list>
+                <!-- Bottom shadow/lip layer -->
+                <item>
+                    <shape android:shape="rectangle">
+                        <corners android:radius="@dimen/key_corner_radius" />
+                        <solid android:color="@color/key_depth_shadow" />
+                    </shape>
+                </item>
+                <!-- Top keycap face layer -->
+                <item android:bottom="2dp">
+                    <shape android:shape="rectangle">
+                        <corners android:radius="@dimen/key_corner_radius" />
+                        <solid android:color="@color/key_depth_surface" />
+                        <stroke android:width="1dp" android:color="@color/key_depth_stroke" />
+                    </shape>
+                </item>
+            </layer-list>
+        </item>
+    </selector>
+</inset>
