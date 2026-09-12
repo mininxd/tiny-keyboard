@@ -40,6 +40,7 @@ public class SoftKeyboard extends InputMethodService
     private static android.graphics.Insets mInsets;
 
     private int mLastDisplayWidth;
+    private int mLastDisplayHeight;
     private boolean mCapsLock;
     private long mLastShiftTime;
     
@@ -77,8 +78,10 @@ public class SoftKeyboard extends InputMethodService
             // so we need to be able to re-build the keyboards if the available
             // space has changed.
             int displayWidth = getMaxWidth();
-            if (displayWidth == mLastDisplayWidth) return;
+            int displayHeight = displayContext.getResources().getDisplayMetrics().heightPixels;
+            if (displayWidth == mLastDisplayWidth && displayHeight == mLastDisplayHeight) return;
             mLastDisplayWidth = displayWidth;
+            mLastDisplayHeight = displayHeight;
         }
         mQwertyKeyboard = new LatinKeyboard(displayContext, R.xml.qwerty);
         mSymbolsKeyboard = new LatinKeyboard(displayContext, R.xml.symbols);

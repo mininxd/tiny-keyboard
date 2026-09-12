@@ -19,6 +19,5 @@
 -->
 
 <resources>
-    <dimen name="key_height">70dp</dimen>
     <dimen name="key_text_size">26dp</dimen>
 </resources>
