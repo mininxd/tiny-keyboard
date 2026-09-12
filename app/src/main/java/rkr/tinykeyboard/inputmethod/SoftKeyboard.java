@@ -20,9 +20,11 @@ import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.res.ColorStateList;
 import android.content.res.Configuration;
-import android.inputmethodservice.InputMethodService;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.inputmethodservice.InputMethodService;
 import android.inputmethodservice.Keyboard;
 import android.inputmethodservice.KeyboardView;
 import android.media.AudioAttributes;
@@ -46,6 +48,7 @@ import android.view.inputmethod.InputMethodManager;
 import android.widget.CheckBox;
 import android.widget.LinearLayout;
 import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.TextView;
@@ -602,148 +605,70 @@ public class SoftKeyboard extends InputMethodService
         }
 
         final SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        boolean currentSwipeCase = prefs.getBoolean(PREF_SWIPE_CASE, false);
         boolean currentHaptic = prefs.getBoolean(PREF_HAPTIC, true);
         int currentVibrateDuration = prefs.getInt(PREF_VIBRATE_DURATION, 20);
         boolean currentHighContrast = prefs.getBoolean(PREF_HIGH_CONTRAST, true);
+        boolean currentSwipeCase = prefs.getBoolean(PREF_SWIPE_CASE, false);
         int currentHeight = prefs.getInt(PREF_HEIGHT_SCALE, 100);
         final String currentTheme = prefs.getString(PREF_THEME, "legacy");
 
         Context context = getDisplayContext();
         float density = context.getResources().getDisplayMetrics().density;
 
+        boolean isNight = (context.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+        boolean dark = "dark".equals(currentTheme) || ("auto".equals(currentTheme) && isNight) || "legacy".equals(currentTheme);
+
+        int surfaceColor = dark ? 0xFF211F26 : 0xFFF3F4F9;
+        int onSurfaceColor = dark ? 0xFFE6E1E5 : 0xFF1B1B1F;
+        int onSurfaceVariantColor = dark ? 0xFFC4C7D0 : 0xFF44474E;
+        int accentColor = dark ? 0xFF82B1FF : 0xFF0061A4;
+
         AlertDialog.Builder builder = new AlertDialog.Builder(context);
-        builder.setTitle("Tiny Keyboard Settings");
+
+        int padH = (int) (18 * density);
+        int padV = (int) (6 * density);
+
+        TextView customTitle = new TextView(context);
+        customTitle.setText("Tiny Keyboard Settings");
+        customTitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
+        customTitle.setTypeface(Typeface.DEFAULT_BOLD);
+        customTitle.setTextColor(onSurfaceColor);
+        customTitle.setPadding(padH, (int) (16 * density), padH, (int) (4 * density));
+        builder.setCustomTitle(customTitle);
 
         ScrollView scrollView = new ScrollView(context);
+        scrollView.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
         LinearLayout layout = new LinearLayout(context);
         layout.setOrientation(LinearLayout.VERTICAL);
-        int padH = (int) (16 * density);
-        int padV = (int) (8 * density);
         layout.setPadding(padH, padV, padH, padV);
         scrollView.addView(layout);
 
-        // --- Typing Gestures ---
-        final CheckBox swipeCaseCheck = new CheckBox(context);
-        swipeCaseCheck.setText("Swipe letter for case (▲ Upper, ▼ Lower)");
-        swipeCaseCheck.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-        swipeCaseCheck.setChecked(currentSwipeCase);
-        layout.addView(swipeCaseCheck);
-
-        // --- High Contrast ---
-        final CheckBox contrastCheck = new CheckBox(context);
-        contrastCheck.setText("High contrast & key depth");
-        contrastCheck.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-        contrastCheck.setChecked(currentHighContrast);
-        layout.addView(contrastCheck);
-
-        // --- Theme (Compact 2x2 Grid) ---
-        final TextView themeLabel = new TextView(context);
-        themeLabel.setText("Theme");
-        themeLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-        themeLabel.setTypeface(Typeface.DEFAULT_BOLD);
-        themeLabel.setPadding(0, (int) (6 * density), 0, (int) (2 * density));
-        layout.addView(themeLabel);
-
-        final RadioButton legacyBtn = new RadioButton(context);
-        legacyBtn.setText("Legacy");
-        legacyBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-
-        final RadioButton autoBtn = new RadioButton(context);
-        autoBtn.setText("Auto");
-        autoBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-
-        final RadioButton lightBtn = new RadioButton(context);
-        lightBtn.setText("Light");
-        lightBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-
-        final RadioButton darkBtn = new RadioButton(context);
-        darkBtn.setText("Dark");
-        darkBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-
-        final RadioButton[] themeBtns = new RadioButton[]{legacyBtn, autoBtn, lightBtn, darkBtn};
-        View.OnClickListener themeClickListener = v -> {
-            for (RadioButton rb : themeBtns) {
-                rb.setChecked(rb == v);
-            }
-        };
-        for (RadioButton rb : themeBtns) {
-            rb.setOnClickListener(themeClickListener);
-        }
-
-        if ("auto".equals(currentTheme)) {
-            autoBtn.setChecked(true);
-        } else if ("light".equals(currentTheme)) {
-            lightBtn.setChecked(true);
-        } else if ("dark".equals(currentTheme)) {
-            darkBtn.setChecked(true);
-        } else {
-            legacyBtn.setChecked(true);
-        }
-
-        LinearLayout themeRow1 = new LinearLayout(context);
-        themeRow1.setOrientation(LinearLayout.HORIZONTAL);
-        legacyBtn.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        autoBtn.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        themeRow1.addView(legacyBtn);
-        themeRow1.addView(autoBtn);
-        layout.addView(themeRow1);
-
-        LinearLayout themeRow2 = new LinearLayout(context);
-        themeRow2.setOrientation(LinearLayout.HORIZONTAL);
-        lightBtn.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        darkBtn.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        themeRow2.addView(lightBtn);
-        themeRow2.addView(darkBtn);
-        layout.addView(themeRow2);
-
-        // --- Keyboard Height Slider ---
-        final TextView heightLabel = new TextView(context);
-        heightLabel.setText("Keyboard height: " + currentHeight + "%");
-        heightLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-        heightLabel.setTypeface(Typeface.DEFAULT_BOLD);
-        heightLabel.setPadding(0, (int) (6 * density), 0, (int) (2 * density));
-        layout.addView(heightLabel);
-
-        final SeekBar heightBar = new SeekBar(context);
-        heightBar.setMax(60); // 70% to 130%
-        heightBar.setProgress(currentHeight - 70);
-        heightBar.setPadding((int) (6 * density), (int) (2 * density), (int) (6 * density), (int) (2 * density));
-        heightBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                heightLabel.setText("Keyboard height: " + (70 + progress) + "%");
-            }
-            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
-            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
-        });
-        layout.addView(heightBar);
-
-        // --- Haptics ---
         final CheckBox hapticCheck = new CheckBox(context);
         hapticCheck.setText("Haptic feedback");
-        hapticCheck.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        hapticCheck.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        hapticCheck.setTextColor(onSurfaceColor);
+        hapticCheck.setMinimumHeight(0);
+        hapticCheck.setPadding(hapticCheck.getPaddingLeft(), (int) (3 * density), hapticCheck.getPaddingRight(), (int) (3 * density));
         hapticCheck.setChecked(currentHaptic);
-        hapticCheck.setPadding(0, (int) (4 * density), 0, 0);
         layout.addView(hapticCheck);
 
         final TextView vibrateLabel = new TextView(context);
-        vibrateLabel.setText("Vibration: " + currentVibrateDuration + "ms");
+        vibrateLabel.setText("Vibration duration: " + currentVibrateDuration + "ms");
         vibrateLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-        vibrateLabel.setTypeface(Typeface.DEFAULT_BOLD);
-        vibrateLabel.setPadding(0, (int) (4 * density), 0, (int) (2 * density));
+        vibrateLabel.setTextColor(onSurfaceVariantColor);
+        vibrateLabel.setPadding((int) (2 * density), (int) (3 * density), 0, (int) (1 * density));
         layout.addView(vibrateLabel);
 
         final SeekBar vibrateBar = new SeekBar(context);
         vibrateBar.setMax(95); // 5ms to 100ms
         vibrateBar.setProgress(currentVibrateDuration - 5);
         vibrateBar.setEnabled(currentHaptic);
-        vibrateBar.setPadding((int) (6 * density), (int) (2 * density), (int) (6 * density), (int) (2 * density));
+        vibrateBar.setPadding((int) (4 * density), (int) (2 * density), (int) (4 * density), (int) (2 * density));
         vibrateBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 int duration = 5 + progress;
-                vibrateLabel.setText("Vibration: " + duration + "ms");
+                vibrateLabel.setText("Vibration duration: " + duration + "ms");
                 if (fromUser && hapticCheck.isChecked()) {
                     vibrate(duration);
                 }
@@ -761,34 +686,150 @@ public class SoftKeyboard extends InputMethodService
             vibrateLabel.setAlpha(0.5f);
         }
 
+        final CheckBox contrastCheck = new CheckBox(context);
+        contrastCheck.setText("High contrast");
+        contrastCheck.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        contrastCheck.setTextColor(onSurfaceColor);
+        contrastCheck.setMinimumHeight(0);
+        contrastCheck.setPadding(contrastCheck.getPaddingLeft(), (int) (3 * density), contrastCheck.getPaddingRight(), (int) (3 * density));
+        contrastCheck.setChecked(currentHighContrast);
+        layout.addView(contrastCheck);
+
+        final CheckBox swipeCaseCheck = new CheckBox(context);
+        swipeCaseCheck.setText("Swipe letter for case (▲ Upper, ▼ Lower)");
+        swipeCaseCheck.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        swipeCaseCheck.setTextColor(onSurfaceColor);
+        swipeCaseCheck.setMinimumHeight(0);
+        swipeCaseCheck.setPadding(swipeCaseCheck.getPaddingLeft(), (int) (3 * density), swipeCaseCheck.getPaddingRight(), (int) (3 * density));
+        swipeCaseCheck.setChecked(currentSwipeCase);
+        layout.addView(swipeCaseCheck);
+
+        final TextView themeLabel = new TextView(context);
+        themeLabel.setText("Theme");
+        themeLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        themeLabel.setTypeface(Typeface.DEFAULT_BOLD);
+        themeLabel.setTextColor(onSurfaceVariantColor);
+        themeLabel.setPadding((int) (2 * density), (int) (6 * density), 0, (int) (1 * density));
+        layout.addView(themeLabel);
+
+        final RadioGroup themeGroup = new RadioGroup(context);
+        themeGroup.setOrientation(RadioGroup.VERTICAL);
+
+        final RadioButton legacyBtn = new RadioButton(context);
+        legacyBtn.setId(1);
+        legacyBtn.setText("Legacy");
+        legacyBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        legacyBtn.setTextColor(onSurfaceColor);
+        legacyBtn.setMinimumHeight(0);
+        legacyBtn.setPadding(legacyBtn.getPaddingLeft(), (int) (2.5f * density), legacyBtn.getPaddingRight(), (int) (2.5f * density));
+        themeGroup.addView(legacyBtn);
+
+        final RadioButton autoBtn = new RadioButton(context);
+        autoBtn.setId(2);
+        autoBtn.setText("Auto");
+        autoBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        autoBtn.setTextColor(onSurfaceColor);
+        autoBtn.setMinimumHeight(0);
+        autoBtn.setPadding(autoBtn.getPaddingLeft(), (int) (2.5f * density), autoBtn.getPaddingRight(), (int) (2.5f * density));
+        themeGroup.addView(autoBtn);
+
+        final RadioButton lightBtn = new RadioButton(context);
+        lightBtn.setId(3);
+        lightBtn.setText("Light");
+        lightBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        lightBtn.setTextColor(onSurfaceColor);
+        lightBtn.setMinimumHeight(0);
+        lightBtn.setPadding(lightBtn.getPaddingLeft(), (int) (2.5f * density), lightBtn.getPaddingRight(), (int) (2.5f * density));
+        themeGroup.addView(lightBtn);
+
+        final RadioButton darkBtn = new RadioButton(context);
+        darkBtn.setId(4);
+        darkBtn.setText("Dark");
+        darkBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        darkBtn.setTextColor(onSurfaceColor);
+        darkBtn.setMinimumHeight(0);
+        darkBtn.setPadding(darkBtn.getPaddingLeft(), (int) (2.5f * density), darkBtn.getPaddingRight(), (int) (2.5f * density));
+        themeGroup.addView(darkBtn);
+
+        if ("auto".equals(currentTheme)) {
+            autoBtn.setChecked(true);
+        } else if ("light".equals(currentTheme)) {
+            lightBtn.setChecked(true);
+        } else if ("dark".equals(currentTheme)) {
+            darkBtn.setChecked(true);
+        } else {
+            legacyBtn.setChecked(true);
+        }
+        layout.addView(themeGroup);
+
+        final TextView heightLabel = new TextView(context);
+        heightLabel.setText("Keyboard height: " + currentHeight + "%");
+        heightLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        heightLabel.setTypeface(Typeface.DEFAULT_BOLD);
+        heightLabel.setTextColor(onSurfaceVariantColor);
+        heightLabel.setPadding((int) (2 * density), (int) (6 * density), 0, (int) (1 * density));
+        layout.addView(heightLabel);
+
+        final SeekBar heightBar = new SeekBar(context);
+        heightBar.setMax(60); // 70% to 130%
+        heightBar.setProgress(currentHeight - 70);
+        heightBar.setPadding((int) (4 * density), (int) (2 * density), (int) (4 * density), (int) (2 * density));
+        heightBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                heightLabel.setText("Keyboard height: " + (70 + progress) + "%");
+            }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+        layout.addView(heightBar);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            ColorStateList tint = ColorStateList.valueOf(accentColor);
+            hapticCheck.setButtonTintList(tint);
+            contrastCheck.setButtonTintList(tint);
+            swipeCaseCheck.setButtonTintList(tint);
+            legacyBtn.setButtonTintList(tint);
+            autoBtn.setButtonTintList(tint);
+            lightBtn.setButtonTintList(tint);
+            darkBtn.setButtonTintList(tint);
+            vibrateBar.setProgressTintList(tint);
+            vibrateBar.setThumbTintList(tint);
+            heightBar.setProgressTintList(tint);
+            heightBar.setThumbTintList(tint);
+        }
+
         builder.setView(scrollView);
         builder.setPositiveButton("OK", (dialog, which) -> {
-            boolean swipeCase = swipeCaseCheck.isChecked();
             boolean haptic = hapticCheck.isChecked();
             int vibrateDuration = 5 + vibrateBar.getProgress();
             boolean highContrast = contrastCheck.isChecked();
+            boolean swipeCase = swipeCaseCheck.isChecked();
             int height = 70 + heightBar.getProgress();
+            int checkedThemeId = themeGroup.getCheckedRadioButtonId();
             String selectedTheme = "legacy";
-            if (autoBtn.isChecked()) {
+            if (checkedThemeId == 1) {
+                selectedTheme = "legacy";
+            } else if (checkedThemeId == 2) {
                 selectedTheme = "auto";
-            } else if (lightBtn.isChecked()) {
+            } else if (checkedThemeId == 3) {
                 selectedTheme = "light";
-            } else if (darkBtn.isChecked()) {
+            } else if (checkedThemeId == 4) {
                 selectedTheme = "dark";
             }
 
             prefs.edit()
-                .putBoolean(PREF_SWIPE_CASE, swipeCase)
                 .putBoolean(PREF_HAPTIC, haptic)
                 .putInt(PREF_VIBRATE_DURATION, vibrateDuration)
                 .putBoolean(PREF_HIGH_CONTRAST, highContrast)
+                .putBoolean(PREF_SWIPE_CASE, swipeCase)
                 .putInt(PREF_HEIGHT_SCALE, height)
                 .putString(PREF_THEME, selectedTheme)
                 .apply();
-            mSwipeCaseEnabled = swipeCase;
             mHapticEnabled = haptic;
             mVibrateDuration = vibrateDuration;
             mHighContrast = highContrast;
+            mSwipeCaseEnabled = swipeCase;
             mLastDisplayWidth = 0;
             mLastDisplayHeight = 0;
             onInitializeInterface();
@@ -800,6 +841,11 @@ public class SoftKeyboard extends InputMethodService
         Dialog dialog = builder.create();
         Window window = dialog.getWindow();
         if (window != null) {
+            GradientDrawable dialogBg = new GradientDrawable();
+            dialogBg.setCornerRadius(28 * density);
+            dialogBg.setColor(surfaceColor);
+            window.setBackgroundDrawable(dialogBg);
+
             WindowManager.LayoutParams lp = window.getAttributes();
             lp.token = mInputView.getWindowToken();
             lp.type = WindowManager.LayoutParams.TYPE_APPLICATION_ATTACHED_DIALOG;
@@ -807,5 +853,16 @@ public class SoftKeyboard extends InputMethodService
             window.addFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM);
         }
         dialog.show();
+
+        if (dialog instanceof AlertDialog) {
+            AlertDialog ad = (AlertDialog) dialog;
+            if (ad.getButton(AlertDialog.BUTTON_POSITIVE) != null) {
+                ad.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(accentColor);
+                ad.getButton(AlertDialog.BUTTON_POSITIVE).setTypeface(Typeface.DEFAULT_BOLD);
+            }
+            if (ad.getButton(AlertDialog.BUTTON_NEGATIVE) != null) {
+                ad.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(onSurfaceVariantColor);
+            }
+        }
     }
 }
