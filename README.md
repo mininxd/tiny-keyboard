@@ -4,13 +4,11 @@
 
 ## About
 
-An ultra-minimalist, private Android keyboard with the smallest possible APK size (~34 kB release APK), modern Material 3 styling, and zero external dependencies.
-
-- **Size**: ~34 kB release APK
-- **Permissions**: 0 (no internet, no telemetry, no storage access)
-- **Dependencies**: 0 external libraries
-- **Layouts**: en_US (QWERTY with standard Gboard symbol placement)
-- **License**: Apache License 2.0
+- Smallest possible APK size of 26kB (as of version 0.7)
+- Permissions: 0
+- Supported layouts: en_US
+- No Launcher icon and Settings
+- Licensed under Apache License Version 2
 
 ## Features
 
@@ -23,7 +21,20 @@ An ultra-minimalist, private Android keyboard with the smallest possible APK siz
 
 ## How it's made
 
-Android OS contains default [Keyboard](https://developer.android.com/reference/android/inputmethodservice/Keyboard) and [KeyboardView](https://developer.android.com/reference/android/inputmethodservice/KeyboardView) implementations. Input method developers can use these classes as base for their own keyboard implementations. Tiny Keyboard enhances these with Material 3 styling, dynamic scaling, and custom gesture settings while keeping code and resource footprints strictly minimal.
+Android OS contains a default [Keyboard](https://developer.android.com/reference/android/inputmethodservice/Keyboard) and [KeyboardView](https://developer.android.com/reference/android/inputmethodservice/KeyboardView) implementations (deprecated as of Android 10, but still available). Input method developers can use these classes as base for their own keyboard implementations. Tiny Keyboard is an implementation without any changes.
+
+All that is contained in application source is key layouts and special handling for action keys.
+
+## The future
+
+The goal of this keyboard will stay a minimal size. Any functionality that doesn't increase the size drastically can be included. Check the Issues tab to see what is planned or request functionality.
+
+Keyboard logic and view code may need to move into the application due to:
+- Being deprecated in Android 10
+- Implementations may differ across Android versions in a breaking way
+- Implementations may differ across vendors in a breaking way
+- Modifications are limited by exposed interfaces
+- Provided implementation has bugs
 
 ## Downloads
 
