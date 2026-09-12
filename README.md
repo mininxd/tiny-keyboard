@@ -4,28 +4,26 @@
 
 ## About
 
-- Smallest possible APK size of 26kB (as of version 0.7)
-- Permissions: 0
-- Supported layouts: en_US
-- No Launcher icon and Settings
-- Licensed under Apache License Version 2
+An ultra-minimalist, private Android keyboard with the smallest possible APK size (~34 kB release APK), modern Material 3 styling, and zero external dependencies.
+
+- **Size**: ~34 kB release APK
+- **Permissions**: 0 (no internet, no telemetry, no storage access)
+- **Dependencies**: 0 external libraries
+- **Layouts**: en_US (QWERTY with standard Gboard symbol placement)
+- **License**: Apache License 2.0
+
+## Features
+
+- **Material 3 UI**: Clean, rounded key cards with native state feedback and zero legacy text shadows.
+- **Theme Selection**: Choose between **Auto** (follows system dark mode), **Light**, or **Dark** themes.
+- **Auto & Adjustable Height**: Automatically scales proportionally to the display size (`8%p` per row in portrait, `13%p` in landscape).
+- **Haptic Feedback**: Subtle tactile feedback on keypress.
+- **Gboard-Style Symbols**: Muscle-memory layout matching standard Gboard positions for `?`, `!`, `"`, `'`, `:`, `;`, `*`, `(`, `)`, etc.
+- **Quick Settings Dialog**: Hold the `.` (dot) key and drag upward (or swipe up from `.`) to access the in-keyboard settings menu to toggle haptics, adjust the height slider (70% – 130%), and pick your theme.
 
 ## How it's made
 
-Android OS contains a default [Keyboard](https://developer.android.com/reference/android/inputmethodservice/Keyboard) and [KeyboardView](https://developer.android.com/reference/android/inputmethodservice/KeyboardView) implementations (deprecated as of Android 10, but still available). Input method developers can use these classes as base for their own keyboard implementations. Tiny Keyboard is an implementation without any changes.
-
-All that is contained in application source is key layouts and special handling for action keys.
-
-## The future
-
-The goal of this keyboard will stay a minimal size. Any functionality that doesn't increase the size drastically can be included. Check the Issues tab to see what is planned or request functionality.
-
-Keyboard logic and view code may need to move into the application due to:
-- Being deprecated in Android 10
-- Implementations may differ across Android versions in a breaking way
-- Implementations may differ across vendors in a breaking way
-- Modifications are limited by exposed interfaces
-- Provided implementation has bugs
+Android OS contains default [Keyboard](https://developer.android.com/reference/android/inputmethodservice/Keyboard) and [KeyboardView](https://developer.android.com/reference/android/inputmethodservice/KeyboardView) implementations. Input method developers can use these classes as base for their own keyboard implementations. Tiny Keyboard enhances these with Material 3 styling, dynamic scaling, and custom gesture settings while keeping code and resource footprints strictly minimal.
 
 ## Downloads
 
@@ -35,6 +33,8 @@ Keyboard logic and view code may need to move into the application due to:
 [<img src="https://gitlab.com/IzzyOnDroid/repo/-/raw/master/assets/IzzyOnDroid.png"
       alt="Get it at IzzyOnDroid"
       height="80">](https://apt.izzysoft.de/packages/rkr.tinykeyboard.inputmethod)
+
+Pre-built `app-debug.apk` and `app-release.apk` are also automatically built and uploaded to GitHub Actions artifacts on every push.
 
 ## Credits
 
