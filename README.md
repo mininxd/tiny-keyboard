@@ -13,7 +13,7 @@
 ## Features
 
 - **Material 3 UI**: Clean, rounded key cards with native state feedback and zero legacy text shadows.
-- **Theme Selection**: Choose between **Auto** (follows system dark mode), **Light**, or **Dark** themes.
+- **Theme Selection**: Choose between **Legacy** (classic AOSP style), **Light**, **Dark**, or **Auto** (follows system dark mode) themes.
 - **Auto & Adjustable Height**: Automatically scales proportionally to the display size (`8%p` per row in portrait, `13%p` in landscape).
 - **Haptic Feedback**: Subtle tactile feedback on keypress.
 - **Gboard-Style Symbols**: Muscle-memory layout matching standard Gboard positions for `?`, `!`, `"`, `'`, `:`, `;`, `*`, `(`, `)`, etc.

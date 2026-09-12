@@ -41,6 +41,7 @@ import android.widget.CheckBox;
 import android.widget.LinearLayout;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
+import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.TextView;
 
@@ -135,7 +136,10 @@ public class SoftKeyboard extends InputMethodService
 
     @Override public View onCreateInputView() {
         Context context = getThemedContext();
-        mInputView = (KeyboardView) LayoutInflater.from(context).inflate(R.layout.input, null);
+        String theme = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(PREF_THEME, "auto");
+        int layoutRes = "legacy".equals(theme) ? R.layout.input_legacy : R.layout.input;
+        mInputView = (KeyboardView) LayoutInflater.from(context).inflate(layoutRes, null);
         mInputView.setOnKeyboardActionListener(this);
         mInputView.setPreviewEnabled(false);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -174,7 +178,7 @@ public class SoftKeyboard extends InputMethodService
                 return false;
             }
         });
-        setLatinKeyboard(mQwertyKeyboard);
+        setLatinKeyboard(mCurKeyboard != null ? mCurKeyboard : mQwertyKeyboard);
         return mInputView;
     }
 
@@ -392,10 +396,12 @@ public class SoftKeyboard extends InputMethodService
         AlertDialog.Builder builder = new AlertDialog.Builder(context);
         builder.setTitle("Tiny Keyboard Settings");
 
+        ScrollView scrollView = new ScrollView(context);
         LinearLayout layout = new LinearLayout(context);
         layout.setOrientation(LinearLayout.VERTICAL);
         int pad = (int) (16 * context.getResources().getDisplayMetrics().density);
         layout.setPadding(pad, pad, pad, pad);
+        scrollView.addView(layout);
 
         final CheckBox hapticCheck = new CheckBox(context);
         hapticCheck.setText("Haptic feedback");
@@ -408,12 +414,12 @@ public class SoftKeyboard extends InputMethodService
         layout.addView(themeLabel);
 
         final RadioGroup themeGroup = new RadioGroup(context);
-        themeGroup.setOrientation(RadioGroup.HORIZONTAL);
+        themeGroup.setOrientation(RadioGroup.VERTICAL);
 
-        final RadioButton autoBtn = new RadioButton(context);
-        autoBtn.setId(1);
-        autoBtn.setText("Auto");
-        themeGroup.addView(autoBtn);
+        final RadioButton legacyBtn = new RadioButton(context);
+        legacyBtn.setId(1);
+        legacyBtn.setText("Legacy");
+        themeGroup.addView(legacyBtn);
 
         final RadioButton lightBtn = new RadioButton(context);
         lightBtn.setId(2);
@@ -425,7 +431,14 @@ public class SoftKeyboard extends InputMethodService
         darkBtn.setText("Dark");
         themeGroup.addView(darkBtn);
 
-        if ("light".equals(currentTheme)) {
+        final RadioButton autoBtn = new RadioButton(context);
+        autoBtn.setId(4);
+        autoBtn.setText("Auto");
+        themeGroup.addView(autoBtn);
+
+        if ("legacy".equals(currentTheme)) {
+            legacyBtn.setChecked(true);
+        } else if ("light".equals(currentTheme)) {
             lightBtn.setChecked(true);
         } else if ("dark".equals(currentTheme)) {
             darkBtn.setChecked(true);
@@ -452,16 +465,20 @@ public class SoftKeyboard extends InputMethodService
         });
         layout.addView(heightBar);
 
-        builder.setView(layout);
+        builder.setView(scrollView);
         builder.setPositiveButton("OK", (dialog, which) -> {
             boolean haptic = hapticCheck.isChecked();
             int height = 70 + heightBar.getProgress();
             int checkedThemeId = themeGroup.getCheckedRadioButtonId();
             String selectedTheme = "auto";
-            if (checkedThemeId == 2) {
+            if (checkedThemeId == 1) {
+                selectedTheme = "legacy";
+            } else if (checkedThemeId == 2) {
                 selectedTheme = "light";
             } else if (checkedThemeId == 3) {
                 selectedTheme = "dark";
+            } else if (checkedThemeId == 4) {
+                selectedTheme = "auto";
             }
 
             prefs.edit()
