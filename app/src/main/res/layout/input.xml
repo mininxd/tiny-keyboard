@@ -23,5 +23,11 @@
     android:layout_alignParentBottom="true"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:background="@color/m3_keyboard_background"
+    android:keyBackground="@drawable/m3_key_background"
+    android:keyTextColor="@color/m3_key_text_color"
     android:keyTextSize="@dimen/key_text_size"
+    android:labelTextSize="@dimen/label_text_size"
+    android:shadowRadius="0"
+    android:shadowColor="@android:color/transparent"
     />

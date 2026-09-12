@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Material 3 Light Colors -->
+    <color name="m3_keyboard_background">#F3F4F9</color>
+    <color name="m3_key_background">#FFFFFF</color>
+    <color name="m3_key_background_pressed">#E0E2EC</color>
+    <color name="m3_key_background_active">#D3E3FD</color>
+    <color name="m3_key_text_color">#1B1B1F</color>
+</resources>
