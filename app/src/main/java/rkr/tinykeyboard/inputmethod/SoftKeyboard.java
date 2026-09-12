@@ -26,13 +26,10 @@ import android.inputmethodservice.Keyboard;
 import android.inputmethodservice.KeyboardView;
 import android.media.AudioAttributes;
 import android.os.Build;
-import android.os.Handler;
 import android.os.IBinder;
-import android.os.Looper;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.text.InputType;
-import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
@@ -45,7 +42,6 @@ import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.CheckBox;
 import android.widget.LinearLayout;
-import android.widget.PopupWindow;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.ScrollView;
@@ -81,9 +77,6 @@ public class SoftKeyboard extends InputMethodService
     private LatinKeyboard mQwertyKeyboard;
     private LatinKeyboard mCurKeyboard;
 
-    private PopupWindow mDotPopup;
-    private final Handler mHandler = new Handler(Looper.getMainLooper());
-    private Runnable mShowDotPopupRunnable;
 
     @Override public void onCreate() {
         super.onCreate();
@@ -204,8 +197,6 @@ public class SoftKeyboard extends InputMethodService
                             float dy = event.getY() - mDownY;
                             float threshold = 30 * v.getResources().getDisplayMetrics().density;
                             if (dy < -threshold) {
-                                cancelDotPopupTimer();
-                                dismissDotPopup();
                                 mLastPressedKey = 0;
                                 showSettingsDialog();
                                 MotionEvent cancelEvent = MotionEvent.obtain(event);
@@ -215,11 +206,6 @@ public class SoftKeyboard extends InputMethodService
                                 return true;
                             }
                         }
-                        break;
-                    case MotionEvent.ACTION_UP:
-                    case MotionEvent.ACTION_CANCEL:
-                        cancelDotPopupTimer();
-                        dismissDotPopup();
                         break;
                 }
                 return false;
@@ -279,8 +265,6 @@ public class SoftKeyboard extends InputMethodService
 
     @Override public void onFinishInput() {
         super.onFinishInput();
-        cancelDotPopupTimer();
-        dismissDotPopup();
         mCurKeyboard = mQwertyKeyboard;
         if (mInputView != null) {
             mInputView.closing();
@@ -289,8 +273,6 @@ public class SoftKeyboard extends InputMethodService
 
     @Override public void onDestroy() {
         super.onDestroy();
-        cancelDotPopupTimer();
-        dismissDotPopup();
     }
     
     @Override public void onStartInputView(EditorInfo attribute, boolean restarting) {
@@ -417,8 +399,6 @@ public class SoftKeyboard extends InputMethodService
 
     public void swipeUp() {
         if (mLastPressedKey == 46) {
-            cancelDotPopupTimer();
-            dismissDotPopup();
             mLastPressedKey = 0;
             showSettingsDialog();
         }
@@ -485,117 +465,12 @@ public class SoftKeyboard extends InputMethodService
     
     public void onPress(int primaryCode) {
         mLastPressedKey = primaryCode;
-        if (primaryCode == 46) {
-            cancelDotPopupTimer();
-            mShowDotPopupRunnable = () -> showDotPopup();
-            mHandler.postDelayed(mShowDotPopupRunnable, 300);
-        }
         vibrate(mVibrateDuration);
     }
     
     public void onRelease(int primaryCode) {
         if (mLastPressedKey == primaryCode) {
             mLastPressedKey = 0;
-        }
-        if (primaryCode == 46) {
-            cancelDotPopupTimer();
-            dismissDotPopup();
-        }
-    }
-
-    private void cancelDotPopupTimer() {
-        if (mShowDotPopupRunnable != null) {
-            mHandler.removeCallbacks(mShowDotPopupRunnable);
-            mShowDotPopupRunnable = null;
-        }
-    }
-
-    private void showDotPopup() {
-        if (mInputView == null || mInputView.getWindowToken() == null) return;
-        dismissDotPopup();
-
-        Keyboard.Key dotKey = null;
-        if (mCurKeyboard != null && mCurKeyboard.getKeys() != null) {
-            for (Keyboard.Key k : mCurKeyboard.getKeys()) {
-                if (k.codes != null && k.codes.length > 0 && k.codes[0] == 46) {
-                    dotKey = k;
-                    break;
-                }
-            }
-        }
-        if (dotKey == null) return;
-
-        Context context = getThemedContext();
-        float density = context.getResources().getDisplayMetrics().density;
-
-        TextView tv = new TextView(context);
-        tv.setText("⚙ Settings  ▲");
-        tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 13);
-        tv.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        tv.setGravity(Gravity.CENTER);
-
-        int padH = (int) (12 * density);
-        int padV = (int) (8 * density);
-        tv.setPadding(padH, padV, padH, padV);
-
-        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
-        bg.setCornerRadius(12 * density);
-
-        String theme = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(PREF_THEME, "legacy");
-        boolean isNight = (context.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
-        boolean dark = "dark".equals(theme) || ("auto".equals(theme) && isNight) || "legacy".equals(theme);
-
-        if (dark) {
-            bg.setColor(0xFF2B2D31);
-            bg.setStroke((int) (1.5f * density), 0xFF004A77);
-            tv.setTextColor(0xFFE3E3E8);
-        } else {
-            bg.setColor(0xFFFFFFFF);
-            bg.setStroke((int) (1.5f * density), 0xFFD3E3FD);
-            tv.setTextColor(0xFF1B1B1F);
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            tv.setElevation(8 * density);
-        }
-        tv.setBackground(bg);
-
-        tv.measure(
-            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
-            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-        );
-        int popW = tv.getMeasuredWidth();
-        int popH = tv.getMeasuredHeight();
-
-        mDotPopup = new PopupWindow(tv, popW, popH);
-        mDotPopup.setClippingEnabled(false);
-
-        int[] loc = new int[2];
-        mInputView.getLocationInWindow(loc);
-        int posX = loc[0] + dotKey.x + dotKey.width / 2 - popW / 2;
-        int posY = loc[1] + dotKey.y - popH - (int) (8 * density);
-
-        int screenW = context.getResources().getDisplayMetrics().widthPixels;
-        if (posX + popW > screenW - 10) {
-            posX = screenW - popW - 10;
-        }
-        if (posX < 10) {
-            posX = 10;
-        }
-
-        try {
-            mDotPopup.showAtLocation(mInputView, Gravity.NO_GRAVITY, posX, posY);
-            vibrate(mVibrateDuration);
-        } catch (Exception ignored) {}
-    }
-
-    private void dismissDotPopup() {
-        if (mDotPopup != null) {
-            try {
-                if (mDotPopup.isShowing()) {
-                    mDotPopup.dismiss();
-                }
-            } catch (Exception ignored) {}
-            mDotPopup = null;
         }
     }
 

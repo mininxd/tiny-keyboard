@@ -18,7 +18,7 @@
 - **Haptic Feedback & Duration Slider**: Subtle tactile feedback on keypress with adjustable duration slider (5ms – 100ms) and instant tactile preview.
 - **High Contrast & Depth**: Toggle 3D key depth effects with elevated bottom shadow lips and high-contrast keycard borders.
 - **Gboard-Style Symbols**: Muscle-memory layout matching standard Gboard positions for `?`, `!`, `"`, `'`, `:`, `;`, `*`, `(`, `)`, etc.
-- **Quick Settings Dialog**: Hold the `.` (dot) key to display a floating settings hint popup, then slide upward to access the in-keyboard settings menu to toggle haptics & vibration duration, toggle high contrast & depth, adjust keyboard height (70% – 130%), and pick your theme.
+- **Quick Settings Dialog**: Slide upward on the `.` (dot) key to access the in-keyboard settings menu to toggle haptics & vibration duration, toggle high contrast & depth, adjust keyboard height (70% – 130%), and pick your theme.
 
 ## How it's made
 
