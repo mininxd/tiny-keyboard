@@ -36,9 +36,11 @@ jobs:
 
       - name: Compress images with FFmpeg
         run: |
-          find app/src/main/res -name "*.png" | while read -r img; do
-            ffmpeg -y -v error -i "$img" -pred mixed -compression_level 9 "${img}.tmp.png" && mv "${img}.tmp.png" "$img"
-          done
+          if command -v ffmpeg >/dev/null 2>&1; then
+            find app/src/main/res -name "*.png" | while read -r img; do
+              ffmpeg -nostdin -y -v error -i "$img" -pred mixed -compression_level 9 "${img}.tmp.png" && mv "${img}.tmp.png" "$img"
+            done
+          fi
 
       - name: Build Debug and Release APKs
         run: |
