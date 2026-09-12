@@ -31,13 +31,52 @@ public class LatinKeyboard extends Keyboard {
     private Key mLanguageSwitchKey;
     private Key mSavedSpaceKey;
     private Key mSavedLanguageSwitchKey;
+    private int mTotalHeight;
 
     public LatinKeyboard(Context context, int xmlLayoutResId) {
         super(context, xmlLayoutResId);
+        mTotalHeight = super.getHeight();
     }
 
     public LatinKeyboard(Context context, int xmlLayoutResId, int modeId, int width, int height) {
+        this(context, xmlLayoutResId, modeId, width, height, 1.0f);
+    }
+
+    public LatinKeyboard(Context context, int xmlLayoutResId, int modeId, int width, int height, float scale) {
         super(context, xmlLayoutResId, modeId, width, height);
+        applyScale(scale);
+    }
+
+    private void applyScale(float scale) {
+        if (scale == 1.0f || scale <= 0) {
+            mTotalHeight = super.getHeight();
+            return;
+        }
+        int maxBottom = 0;
+        for (Key key : getKeys()) {
+            key.height = Math.round(key.height * scale);
+            key.y = Math.round(key.y * scale);
+            if (key.y + key.height > maxBottom) {
+                maxBottom = key.y + key.height;
+            }
+        }
+        if (mSavedSpaceKey != null) {
+            mSavedSpaceKey.height = Math.round(mSavedSpaceKey.height * scale);
+            mSavedSpaceKey.y = Math.round(mSavedSpaceKey.y * scale);
+        }
+        if (mSavedLanguageSwitchKey != null) {
+            mSavedLanguageSwitchKey.height = Math.round(mSavedLanguageSwitchKey.height * scale);
+            mSavedLanguageSwitchKey.y = Math.round(mSavedLanguageSwitchKey.y * scale);
+        }
+        mTotalHeight = maxBottom > 0 ? maxBottom : Math.round(super.getHeight() * scale);
+    }
+
+    @Override
+    public int getHeight() {
+        if (mTotalHeight > 0) {
+            return mTotalHeight;
+        }
+        return super.getHeight();
     }
 
     @Override
@@ -56,6 +95,9 @@ public class LatinKeyboard extends Keyboard {
     }
 
     void setLanguageSwitchKeyVisibility(boolean visible) {
+        if (mSpaceKey == null || mLanguageSwitchKey == null) {
+            return;
+        }
         if (visible) {
             mSpaceKey.width = mSavedSpaceKey.width;
             mSpaceKey.x = mSavedSpaceKey.x;

@@ -17,7 +17,7 @@
 - **Auto & Adjustable Height**: Automatically scales proportionally to the display size (`8%p` per row in portrait, `13%p` in landscape).
 - **Haptic Feedback**: Subtle tactile feedback on keypress.
 - **Gboard-Style Symbols**: Muscle-memory layout matching standard Gboard positions for `?`, `!`, `"`, `'`, `:`, `;`, `*`, `(`, `)`, etc.
-- **Quick Settings Dialog**: Hold the `.` (dot) key and drag upward (or swipe up from `.`) to access the in-keyboard settings menu to toggle haptics, adjust the height slider (70% – 130%), and pick your theme.
+- **Quick Settings Dialog**: Hold the `.` (dot) key to display a floating settings hint popup, then slide upward to access the in-keyboard settings menu to toggle haptics, adjust the height slider (70% – 130%), and pick your theme.
 
 ## How it's made
 
