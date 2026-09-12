@@ -20,6 +20,7 @@ import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.res.Configuration;
 import android.inputmethodservice.InputMethodService;
 import android.inputmethodservice.Keyboard;
 import android.inputmethodservice.KeyboardView;
@@ -28,6 +29,7 @@ import android.os.IBinder;
 import android.text.InputType;
 import android.view.HapticFeedbackConstants;
 import android.view.KeyEvent;
+import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.Window;
@@ -37,6 +39,8 @@ import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.CheckBox;
 import android.widget.LinearLayout;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.SeekBar;
 import android.widget.TextView;
 
@@ -46,6 +50,7 @@ public class SoftKeyboard extends InputMethodService
     private static final String PREFS_NAME = "tiny_keyboard_prefs";
     private static final String PREF_HAPTIC = "haptic_feedback";
     private static final String PREF_HEIGHT_SCALE = "height_scale";
+    private static final String PREF_THEME = "keyboard_theme";
 
     private InputMethodManager mInputMethodManager;
     private KeyboardView mInputView;
@@ -91,8 +96,25 @@ public class SoftKeyboard extends InputMethodService
         return createDisplayContext(wm.getDefaultDisplay());
     }
 
+    Context getThemedContext() {
+        Context context = getDisplayContext();
+        String theme = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(PREF_THEME, "auto");
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            Configuration conf = new Configuration(context.getResources().getConfiguration());
+            if ("light".equals(theme)) {
+                conf.uiMode = (conf.uiMode & ~Configuration.UI_MODE_NIGHT_MASK) | Configuration.UI_MODE_NIGHT_NO;
+                return context.createConfigurationContext(conf);
+            } else if ("dark".equals(theme)) {
+                conf.uiMode = (conf.uiMode & ~Configuration.UI_MODE_NIGHT_MASK) | Configuration.UI_MODE_NIGHT_YES;
+                return context.createConfigurationContext(conf);
+            }
+        }
+        return context;
+    }
+
     @Override public void onInitializeInterface() {
-        final Context displayContext = getDisplayContext();
+        final Context displayContext = getThemedContext();
 
         int displayWidth = getMaxWidth();
         int baseHeight = displayContext.getResources().getDisplayMetrics().heightPixels;
@@ -112,7 +134,8 @@ public class SoftKeyboard extends InputMethodService
     }
 
     @Override public View onCreateInputView() {
-        mInputView = (KeyboardView) getLayoutInflater().inflate(R.layout.input, null);
+        Context context = getThemedContext();
+        mInputView = (KeyboardView) LayoutInflater.from(context).inflate(R.layout.input, null);
         mInputView.setOnKeyboardActionListener(this);
         mInputView.setPreviewEnabled(false);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -363,6 +386,7 @@ public class SoftKeyboard extends InputMethodService
         final SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         boolean currentHaptic = prefs.getBoolean(PREF_HAPTIC, true);
         int currentHeight = prefs.getInt(PREF_HEIGHT_SCALE, 100);
+        final String currentTheme = prefs.getString(PREF_THEME, "auto");
 
         Context context = getDisplayContext();
         AlertDialog.Builder builder = new AlertDialog.Builder(context);
@@ -377,6 +401,38 @@ public class SoftKeyboard extends InputMethodService
         hapticCheck.setText("Haptic feedback");
         hapticCheck.setChecked(currentHaptic);
         layout.addView(hapticCheck);
+
+        final TextView themeLabel = new TextView(context);
+        themeLabel.setText("Theme");
+        themeLabel.setPadding(0, pad / 2, 0, pad / 4);
+        layout.addView(themeLabel);
+
+        final RadioGroup themeGroup = new RadioGroup(context);
+        themeGroup.setOrientation(RadioGroup.HORIZONTAL);
+
+        final RadioButton autoBtn = new RadioButton(context);
+        autoBtn.setId(1);
+        autoBtn.setText("Auto");
+        themeGroup.addView(autoBtn);
+
+        final RadioButton lightBtn = new RadioButton(context);
+        lightBtn.setId(2);
+        lightBtn.setText("Light");
+        themeGroup.addView(lightBtn);
+
+        final RadioButton darkBtn = new RadioButton(context);
+        darkBtn.setId(3);
+        darkBtn.setText("Dark");
+        themeGroup.addView(darkBtn);
+
+        if ("light".equals(currentTheme)) {
+            lightBtn.setChecked(true);
+        } else if ("dark".equals(currentTheme)) {
+            darkBtn.setChecked(true);
+        } else {
+            autoBtn.setChecked(true);
+        }
+        layout.addView(themeGroup);
 
         final TextView heightLabel = new TextView(context);
         heightLabel.setText("Keyboard height: " + currentHeight + "%");
@@ -400,25 +456,24 @@ public class SoftKeyboard extends InputMethodService
         builder.setPositiveButton("OK", (dialog, which) -> {
             boolean haptic = hapticCheck.isChecked();
             int height = 70 + heightBar.getProgress();
+            int checkedThemeId = themeGroup.getCheckedRadioButtonId();
+            String selectedTheme = "auto";
+            if (checkedThemeId == 2) {
+                selectedTheme = "light";
+            } else if (checkedThemeId == 3) {
+                selectedTheme = "dark";
+            }
+
             prefs.edit()
                 .putBoolean(PREF_HAPTIC, haptic)
                 .putInt(PREF_HEIGHT_SCALE, height)
+                .putString(PREF_THEME, selectedTheme)
                 .apply();
             mHapticEnabled = haptic;
             mLastDisplayWidth = 0;
             mLastDisplayHeight = 0;
             onInitializeInterface();
-            if (mCurKeyboard == mSymbolsKeyboard) {
-                setLatinKeyboard(mSymbolsKeyboard);
-            } else if (mCurKeyboard == mSymbolsShiftedKeyboard) {
-                setLatinKeyboard(mSymbolsShiftedKeyboard);
-            } else {
-                setLatinKeyboard(mQwertyKeyboard);
-            }
-            if (mInputView != null) {
-                mInputView.requestLayout();
-                mInputView.invalidateAllKeys();
-            }
+            setInputView(onCreateInputView());
         });
         builder.setNegativeButton("Cancel", null);
 

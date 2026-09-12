@@ -50,7 +50,7 @@
     </Row>
     
     <Row>
-        <Key android:codes="-1" android:keyLabel="?123" android:keyWidth="@dimen/key_width_action" android:isModifier="true"/>
+        <Key android:codes="-1" android:keyLabel="\?123" android:keyWidth="@dimen/key_width_action" android:isModifier="true"/>
         <Key android:codes="37" android:keyLabel="%"/>
         <Key android:codes="169" android:keyLabel="©"/>
         <Key android:codes="174" android:keyLabel="®"/>
