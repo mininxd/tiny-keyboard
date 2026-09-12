@@ -16,24 +16,36 @@
 
 package rkr.tinykeyboard.inputmethod;
 
+import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.inputmethodservice.InputMethodService;
 import android.inputmethodservice.Keyboard;
 import android.inputmethodservice.KeyboardView;
 import android.os.Build;
 import android.os.IBinder;
 import android.text.InputType;
+import android.view.HapticFeedbackConstants;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
+import android.widget.CheckBox;
+import android.widget.LinearLayout;
+import android.widget.SeekBar;
+import android.widget.TextView;
 
 public class SoftKeyboard extends InputMethodService
         implements KeyboardView.OnKeyboardActionListener {
+
+    private static final String PREFS_NAME = "tiny_keyboard_prefs";
+    private static final String PREF_HAPTIC = "haptic_feedback";
+    private static final String PREF_HEIGHT_SCALE = "height_scale";
 
     private InputMethodManager mInputMethodManager;
     private KeyboardView mInputView;
@@ -43,6 +55,8 @@ public class SoftKeyboard extends InputMethodService
     private int mLastDisplayHeight;
     private boolean mCapsLock;
     private long mLastShiftTime;
+    private boolean mHapticEnabled = true;
+    private int mLastPressedKey = 0;
     
     private LatinKeyboard mSymbolsKeyboard;
     private LatinKeyboard mSymbolsShiftedKeyboard;
@@ -53,6 +67,13 @@ public class SoftKeyboard extends InputMethodService
     @Override public void onCreate() {
         super.onCreate();
         mInputMethodManager = (InputMethodManager)getSystemService(INPUT_METHOD_SERVICE);
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        mHapticEnabled = prefs.getBoolean(PREF_HAPTIC, true);
+    }
+
+    private float getHeightScale() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        return prefs.getInt(PREF_HEIGHT_SCALE, 100) / 100.0f;
     }
 
     Context getDisplayContext() {
@@ -73,19 +94,21 @@ public class SoftKeyboard extends InputMethodService
     @Override public void onInitializeInterface() {
         final Context displayContext = getDisplayContext();
 
+        int displayWidth = getMaxWidth();
+        int baseHeight = displayContext.getResources().getDisplayMetrics().heightPixels;
+        int displayHeight = (int) (baseHeight * getHeightScale());
+
         if (mQwertyKeyboard != null) {
             // Configuration changes can happen after the keyboard gets recreated,
             // so we need to be able to re-build the keyboards if the available
             // space has changed.
-            int displayWidth = getMaxWidth();
-            int displayHeight = displayContext.getResources().getDisplayMetrics().heightPixels;
             if (displayWidth == mLastDisplayWidth && displayHeight == mLastDisplayHeight) return;
             mLastDisplayWidth = displayWidth;
             mLastDisplayHeight = displayHeight;
         }
-        mQwertyKeyboard = new LatinKeyboard(displayContext, R.xml.qwerty);
-        mSymbolsKeyboard = new LatinKeyboard(displayContext, R.xml.symbols);
-        mSymbolsShiftedKeyboard = new LatinKeyboard(displayContext, R.xml.symbols_shift);
+        mQwertyKeyboard = new LatinKeyboard(displayContext, R.xml.qwerty, 0, displayWidth, displayHeight);
+        mSymbolsKeyboard = new LatinKeyboard(displayContext, R.xml.symbols, 0, displayWidth, displayHeight);
+        mSymbolsShiftedKeyboard = new LatinKeyboard(displayContext, R.xml.symbols_shift, 0, displayWidth, displayHeight);
     }
 
     @Override public View onCreateInputView() {
@@ -100,6 +123,34 @@ public class SoftKeyboard extends InputMethodService
                 return WindowInsets.CONSUMED;
             });
         }
+        mInputView.setOnTouchListener(new View.OnTouchListener() {
+            private float mDownY;
+
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                switch (event.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        mDownY = event.getY();
+                        break;
+                    case MotionEvent.ACTION_MOVE:
+                        if (mLastPressedKey == 46) {
+                            float dy = event.getY() - mDownY;
+                            float threshold = 35 * v.getResources().getDisplayMetrics().density;
+                            if (dy < -threshold) {
+                                mLastPressedKey = 0;
+                                showSettingsDialog();
+                                MotionEvent cancelEvent = MotionEvent.obtain(event);
+                                cancelEvent.setAction(MotionEvent.ACTION_CANCEL);
+                                v.onTouchEvent(cancelEvent);
+                                cancelEvent.recycle();
+                                return true;
+                            }
+                        }
+                        break;
+                }
+                return false;
+            }
+        });
         setLatinKeyboard(mQwertyKeyboard);
         return mInputView;
     }
@@ -282,11 +333,104 @@ public class SoftKeyboard extends InputMethodService
     }
 
     public void swipeUp() {
+        if (mLastPressedKey == 46) {
+            mLastPressedKey = 0;
+            showSettingsDialog();
+        }
     }
     
     public void onPress(int primaryCode) {
+        mLastPressedKey = primaryCode;
+        if (mHapticEnabled && mInputView != null) {
+            mInputView.performHapticFeedback(
+                HapticFeedbackConstants.KEYBOARD_TAP,
+                HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING
+            );
+        }
     }
     
     public void onRelease(int primaryCode) {
+        if (mLastPressedKey == primaryCode) {
+            mLastPressedKey = 0;
+        }
+    }
+
+    private void showSettingsDialog() {
+        if (mInputView == null || mInputView.getWindowToken() == null) {
+            return;
+        }
+
+        final SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        boolean currentHaptic = prefs.getBoolean(PREF_HAPTIC, true);
+        int currentHeight = prefs.getInt(PREF_HEIGHT_SCALE, 100);
+
+        Context context = getDisplayContext();
+        AlertDialog.Builder builder = new AlertDialog.Builder(context);
+        builder.setTitle("Tiny Keyboard Settings");
+
+        LinearLayout layout = new LinearLayout(context);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        int pad = (int) (16 * context.getResources().getDisplayMetrics().density);
+        layout.setPadding(pad, pad, pad, pad);
+
+        final CheckBox hapticCheck = new CheckBox(context);
+        hapticCheck.setText("Haptic feedback");
+        hapticCheck.setChecked(currentHaptic);
+        layout.addView(hapticCheck);
+
+        final TextView heightLabel = new TextView(context);
+        heightLabel.setText("Keyboard height: " + currentHeight + "%");
+        heightLabel.setPadding(0, pad / 2, 0, pad / 4);
+        layout.addView(heightLabel);
+
+        final SeekBar heightBar = new SeekBar(context);
+        heightBar.setMax(60); // 70% to 130%
+        heightBar.setProgress(currentHeight - 70);
+        heightBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                heightLabel.setText("Keyboard height: " + (70 + progress) + "%");
+            }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+        layout.addView(heightBar);
+
+        builder.setView(layout);
+        builder.setPositiveButton("OK", (dialog, which) -> {
+            boolean haptic = hapticCheck.isChecked();
+            int height = 70 + heightBar.getProgress();
+            prefs.edit()
+                .putBoolean(PREF_HAPTIC, haptic)
+                .putInt(PREF_HEIGHT_SCALE, height)
+                .apply();
+            mHapticEnabled = haptic;
+            mLastDisplayWidth = 0;
+            mLastDisplayHeight = 0;
+            onInitializeInterface();
+            if (mCurKeyboard == mSymbolsKeyboard) {
+                setLatinKeyboard(mSymbolsKeyboard);
+            } else if (mCurKeyboard == mSymbolsShiftedKeyboard) {
+                setLatinKeyboard(mSymbolsShiftedKeyboard);
+            } else {
+                setLatinKeyboard(mQwertyKeyboard);
+            }
+            if (mInputView != null) {
+                mInputView.requestLayout();
+                mInputView.invalidateAllKeys();
+            }
+        });
+        builder.setNegativeButton("Cancel", null);
+
+        Dialog dialog = builder.create();
+        Window window = dialog.getWindow();
+        if (window != null) {
+            WindowManager.LayoutParams lp = window.getAttributes();
+            lp.token = mInputView.getWindowToken();
+            lp.type = WindowManager.LayoutParams.TYPE_APPLICATION_ATTACHED_DIALOG;
+            window.setAttributes(lp);
+            window.addFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM);
+        }
+        dialog.show();
     }
 }

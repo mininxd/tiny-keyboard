@@ -36,6 +36,10 @@ public class LatinKeyboard extends Keyboard {
         super(context, xmlLayoutResId);
     }
 
+    public LatinKeyboard(Context context, int xmlLayoutResId, int modeId, int width, int height) {
+        super(context, xmlLayoutResId, modeId, width, height);
+    }
+
     @Override
     protected Key createKeyFromXml(Resources res, Row parent, int x, int y, XmlResourceParser parser) {
         Key key = new Key(res, parent, x, y, parser);
