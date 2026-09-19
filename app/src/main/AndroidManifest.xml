@@ -3,7 +3,8 @@
 
     <application
         android:label="@string/ime_name"
-        android:icon="@drawable/ic_launcher">
+        android:icon="@drawable/ic_launcher"
+        android:hardwareAccelerated="false">
         <service
             android:name="SoftKeyboard"
             android:directBootAware="true"

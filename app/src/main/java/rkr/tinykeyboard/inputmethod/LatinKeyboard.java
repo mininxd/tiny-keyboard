@@ -30,8 +30,10 @@ public class LatinKeyboard extends Keyboard {
     private Key mShiftKey;
     private Key mSpaceKey;
     private Key mLanguageSwitchKey;
-    private Key mSavedSpaceKey;
-    private Key mSavedLanguageSwitchKey;
+    private int mSavedSpaceWidth;
+    private int mSavedSpaceX;
+    private int mSavedLangWidth;
+    private CharSequence mSavedLangLabel;
     private int mTotalHeight;
 
     public LatinKeyboard(Context context, int xmlLayoutResId) {
@@ -61,14 +63,9 @@ public class LatinKeyboard extends Keyboard {
                 maxBottom = key.y + key.height;
             }
         }
-        if (mSavedSpaceKey != null) {
-            mSavedSpaceKey.height = Math.round(mSavedSpaceKey.height * scale);
-            mSavedSpaceKey.y = Math.round(mSavedSpaceKey.y * scale);
-        }
-        if (mSavedLanguageSwitchKey != null) {
-            mSavedLanguageSwitchKey.height = Math.round(mSavedLanguageSwitchKey.height * scale);
-            mSavedLanguageSwitchKey.y = Math.round(mSavedLanguageSwitchKey.y * scale);
-        }
+        mSavedSpaceWidth = Math.round(mSavedSpaceWidth * scale);
+        mSavedSpaceX = Math.round(mSavedSpaceX * scale);
+        mSavedLangWidth = Math.round(mSavedLangWidth * scale);
         mTotalHeight = maxBottom > 0 ? maxBottom : Math.round(super.getHeight() * scale);
     }
 
@@ -92,14 +89,9 @@ public class LatinKeyboard extends Keyboard {
             key.height = Math.round(key.height * ratio);
             maxBottom = Math.max(maxBottom, key.y + key.height);
         }
-        if (mSavedSpaceKey != null) {
-            mSavedSpaceKey.y = Math.round(mSavedSpaceKey.y * ratio);
-            mSavedSpaceKey.height = Math.round(mSavedSpaceKey.height * ratio);
-        }
-        if (mSavedLanguageSwitchKey != null) {
-            mSavedLanguageSwitchKey.y = Math.round(mSavedLanguageSwitchKey.y * ratio);
-            mSavedLanguageSwitchKey.height = Math.round(mSavedLanguageSwitchKey.height * ratio);
-        }
+        mSavedSpaceX = Math.round(mSavedSpaceX * ratio);
+        mSavedSpaceWidth = Math.round(mSavedSpaceWidth * ratio);
+        mSavedLangWidth = Math.round(mSavedLangWidth * ratio);
         int diff = targetHeight - maxBottom;
         if (diff != 0) {
             for (Key key : getKeys()) {
@@ -124,12 +116,12 @@ public class LatinKeyboard extends Keyboard {
             mShiftKey = key;
         } else if (code == 32) {
             mSpaceKey = key;
-            mSavedSpaceKey = new Key(res, parent, x, y, parser);
-            mSavedSpaceKey.modifier = true;
+            mSavedSpaceWidth = key.width;
+            mSavedSpaceX = key.x;
         } else if (code == KEYCODE_LANGUAGE_SWITCH) {
             mLanguageSwitchKey = key;
-            mSavedLanguageSwitchKey = new Key(res, parent, x, y, parser);
-            mSavedLanguageSwitchKey.modifier = true;
+            mSavedLangWidth = key.width;
+            mSavedLangLabel = key.label;
         }
         return key;
     }
@@ -150,13 +142,13 @@ public class LatinKeyboard extends Keyboard {
             return;
         }
         if (visible) {
-            mSpaceKey.width = mSavedSpaceKey.width;
-            mSpaceKey.x = mSavedSpaceKey.x;
-            mLanguageSwitchKey.width = mSavedLanguageSwitchKey.width;
-            mLanguageSwitchKey.label = mSavedLanguageSwitchKey.label;
+            mSpaceKey.width = mSavedSpaceWidth;
+            mSpaceKey.x = mSavedSpaceX;
+            mLanguageSwitchKey.width = mSavedLangWidth;
+            mLanguageSwitchKey.label = mSavedLangLabel;
         } else {
-            mSpaceKey.width = mSavedSpaceKey.width + mSavedLanguageSwitchKey.width;
-            mSpaceKey.x = mSavedSpaceKey.x - mSavedLanguageSwitchKey.width;
+            mSpaceKey.width = mSavedSpaceWidth + mSavedLangWidth;
+            mSpaceKey.x = mSavedSpaceX - mSavedLangWidth;
             mLanguageSwitchKey.width = 0;
             mLanguageSwitchKey.label = null;
         }

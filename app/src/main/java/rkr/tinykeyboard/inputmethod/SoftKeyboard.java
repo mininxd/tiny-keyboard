@@ -114,6 +114,7 @@ public class SoftKeyboard extends InputMethodService
     private boolean mKeyPreviewEnabled = true;
     private boolean mNumberRowEnabled = true;
     private int mLastPressedKey = 0;
+    private boolean mTopBarDirty = true;
     
     private LatinKeyboard mSymbolsKeyboard;
     private LatinKeyboard mSymbolsShiftedKeyboard;
@@ -197,6 +198,36 @@ public class SoftKeyboard extends InputMethodService
         return context;
     }
 
+    private LatinKeyboard getSymbolsKeyboard() {
+        if (mSymbolsKeyboard == null) {
+            final Context displayContext = getThemedContext();
+            int displayWidth = getMaxWidth();
+            int baseHeight = displayContext.getResources().getDisplayMetrics().heightPixels;
+            float scale = getHeightScale();
+            int displayHeight = (int) (baseHeight * scale);
+            mSymbolsKeyboard = new LatinKeyboard(displayContext, R.xml.symbols, 0, displayWidth, displayHeight, scale);
+            if (mQwertyKeyboard != null) {
+                mSymbolsKeyboard.forceTotalHeight(mQwertyKeyboard.getHeight());
+            }
+        }
+        return mSymbolsKeyboard;
+    }
+
+    private LatinKeyboard getSymbolsShiftedKeyboard() {
+        if (mSymbolsShiftedKeyboard == null) {
+            final Context displayContext = getThemedContext();
+            int displayWidth = getMaxWidth();
+            int baseHeight = displayContext.getResources().getDisplayMetrics().heightPixels;
+            float scale = getHeightScale();
+            int displayHeight = (int) (baseHeight * scale);
+            mSymbolsShiftedKeyboard = new LatinKeyboard(displayContext, R.xml.symbols_shift, 0, displayWidth, displayHeight, scale);
+            if (mQwertyKeyboard != null) {
+                mSymbolsShiftedKeyboard.forceTotalHeight(mQwertyKeyboard.getHeight());
+            }
+        }
+        return mSymbolsShiftedKeyboard;
+    }
+
     @Override public void onInitializeInterface() {
         final Context displayContext = getThemedContext();
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
@@ -216,22 +247,18 @@ public class SoftKeyboard extends InputMethodService
             mLastDisplayHeight = displayHeight;
         }
 
-        boolean wasSymbols = (mCurKeyboard == mSymbolsKeyboard);
-        boolean wasSymbolsShifted = (mCurKeyboard == mSymbolsShiftedKeyboard);
+        boolean wasSymbols = (mSymbolsKeyboard != null && mCurKeyboard == mSymbolsKeyboard);
+        boolean wasSymbolsShifted = (mSymbolsShiftedKeyboard != null && mCurKeyboard == mSymbolsShiftedKeyboard);
 
         int qwertyRes = mNumberRowEnabled ? R.xml.qwerty_numbers : R.xml.qwerty;
         mQwertyKeyboard = new LatinKeyboard(displayContext, qwertyRes, 0, displayWidth, displayHeight, scale);
-        mSymbolsKeyboard = new LatinKeyboard(displayContext, R.xml.symbols, 0, displayWidth, displayHeight, scale);
-        mSymbolsShiftedKeyboard = new LatinKeyboard(displayContext, R.xml.symbols_shift, 0, displayWidth, displayHeight, scale);
-
-        int targetHeight = mQwertyKeyboard.getHeight();
-        mSymbolsKeyboard.forceTotalHeight(targetHeight);
-        mSymbolsShiftedKeyboard.forceTotalHeight(targetHeight);
+        mSymbolsKeyboard = null;
+        mSymbolsShiftedKeyboard = null;
 
         if (wasSymbolsShifted) {
-            mCurKeyboard = mSymbolsShiftedKeyboard;
+            mCurKeyboard = getSymbolsShiftedKeyboard();
         } else if (wasSymbols) {
-            mCurKeyboard = mSymbolsKeyboard;
+            mCurKeyboard = getSymbolsKeyboard();
         } else {
             mCurKeyboard = mQwertyKeyboard;
         }
@@ -460,11 +487,7 @@ public class SoftKeyboard extends InputMethodService
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
         mContainerView.addView(mInputView);
-
-        mClipboardPanelView = buildClipboardPanelView(context);
-        mClipboardPanelView.setVisibility(View.GONE);
-        mContainerView.addView(mClipboardPanelView);
-
+        mClipboardPanelView = null;
         mRootView.addView(mContainerView);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -492,6 +515,14 @@ public class SoftKeyboard extends InputMethodService
             // Only apply bottom insets to avoid overlapping gesture pill/nav bar.
             // Do NOT apply left/right insets as they cause unwanted horizontal shrinking.
             view.setPadding(0, 0, 0, mInsets.bottom);
+        }
+    }
+
+    @Override
+    public void onConfigureWindow(Window win, boolean isFullscreen, boolean isCandidatesOnly) {
+        super.onConfigureWindow(win, isFullscreen, isCandidatesOnly);
+        if (win != null) {
+            win.clearFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED);
         }
     }
 
@@ -538,7 +569,7 @@ public class SoftKeyboard extends InputMethodService
             case InputType.TYPE_CLASS_PHONE:
                 // Numbers and dates default to the symbols keyboard, with
                 // no extra features.
-                mCurKeyboard = mSymbolsKeyboard;
+                mCurKeyboard = getSymbolsKeyboard();
                 break;
                 
             default:
@@ -562,6 +593,59 @@ public class SoftKeyboard extends InputMethodService
         }
     }
 
+    @Override
+    public void onFinishInputView(boolean finishingInput) {
+        super.onFinishInputView(finishingInput);
+        hideClipboardPanel();
+        if (mTopBarChipsContainer != null) {
+            mTopBarChipsContainer.removeAllViews();
+            mTopBarDirty = true;
+        }
+        if (mClipboardPanelView != null && mContainerView != null) {
+            mContainerView.removeView(mClipboardPanelView);
+            mClipboardPanelView = null;
+            mClipboardItemsLayout = null;
+        }
+        if (mCurKeyboard == mQwertyKeyboard) {
+            mSymbolsKeyboard = null;
+            mSymbolsShiftedKeyboard = null;
+        }
+        dismissPreviewPopup();
+    }
+
+    private void releaseInactiveResources() {
+        dismissPreviewPopup();
+        if (mTopBarChipsContainer != null) {
+            mTopBarChipsContainer.removeAllViews();
+            mTopBarDirty = true;
+        }
+        if (mClipboardPanelView != null && mContainerView != null) {
+            mContainerView.removeView(mClipboardPanelView);
+            mClipboardPanelView = null;
+            mClipboardItemsLayout = null;
+        }
+        if (mCurKeyboard == mQwertyKeyboard) {
+            mSymbolsKeyboard = null;
+            mSymbolsShiftedKeyboard = null;
+        }
+    }
+
+    @Override
+    public void onTrimMemory(int level) {
+        super.onTrimMemory(level);
+        if (level >= TRIM_MEMORY_UI_HIDDEN) {
+            releaseInactiveResources();
+            ClipboardHistory.trimMemory();
+        }
+    }
+
+    @Override
+    public void onLowMemory() {
+        super.onLowMemory();
+        releaseInactiveResources();
+        ClipboardHistory.trimMemory();
+    }
+
     @Override public void onDestroy() {
         super.onDestroy();
         if (mClipboardManager != null && mClipListener != null) {
@@ -569,6 +653,15 @@ public class SoftKeyboard extends InputMethodService
                 mClipboardManager.removePrimaryClipChangedListener(mClipListener);
             } catch (Throwable ignored) {}
         }
+        releaseInactiveResources();
+        mQwertyKeyboard = null;
+        mCurKeyboard = null;
+        mInputView = null;
+        mRootView = null;
+        mContainerView = null;
+        mTopBarLayout = null;
+        mVibrator = null;
+        ClipboardHistory.trimMemory();
     }
     
     @Override public void onStartInputView(EditorInfo attribute, boolean restarting) {
@@ -576,15 +669,21 @@ public class SoftKeyboard extends InputMethodService
         hideClipboardPanel();
         mCapsLock = false;
         // Apply the selected keyboard to the input view.
-        setLatinKeyboard(mCurKeyboard);
+        setLatinKeyboard(mCurKeyboard != null ? mCurKeyboard : mQwertyKeyboard);
         updateShiftKeyState(attribute);
         updateClipboardFromSystem();
+        if (mTopBarDirty) {
+            refreshTopBar();
+        }
     }
 
     @Override
     public void onWindowShown() {
         super.onWindowShown();
         updateClipboardFromSystem();
+        if (mTopBarDirty) {
+            refreshTopBar();
+        }
     }
 
     @Override
@@ -690,17 +789,18 @@ public class SoftKeyboard extends InputMethodService
             handleLanguageSwitch();
         } else if (primaryCode == Keyboard.KEYCODE_MODE_CHANGE && mInputView != null) {
             Keyboard current = mInputView.getKeyboard();
-            if (current == mSymbolsKeyboard || current == mSymbolsShiftedKeyboard) {
+            if (current != null && (current == mSymbolsKeyboard || current == mSymbolsShiftedKeyboard)) {
                 setLatinKeyboard(mQwertyKeyboard);
             } else {
-                setLatinKeyboard(mSymbolsKeyboard);
-                mSymbolsKeyboard.setShifted(false);
+                LatinKeyboard sym = getSymbolsKeyboard();
+                sym.setShifted(false);
+                setLatinKeyboard(sym);
             }
         } else {
             handleCharacter(primaryCode);
             if (primaryCode == 32) {
                 Keyboard cur = mInputView != null ? mInputView.getKeyboard() : mCurKeyboard;
-                if (cur == mSymbolsKeyboard || cur == mSymbolsShiftedKeyboard) {
+                if (cur != null && (cur == mSymbolsKeyboard || cur == mSymbolsShiftedKeyboard)) {
                     setLatinKeyboard(mQwertyKeyboard);
                 }
             }
@@ -745,14 +845,20 @@ public class SoftKeyboard extends InputMethodService
             checkToggleCapsLock();
             mInputView.setShifted(mCapsLock || !mInputView.isShifted());
             updateCapsLockVisual();
-        } else if (currentKeyboard == mSymbolsKeyboard) {
-            mSymbolsKeyboard.setShifted(true);
-            setLatinKeyboard(mSymbolsShiftedKeyboard);
-            mSymbolsShiftedKeyboard.setShifted(true);
-        } else if (currentKeyboard == mSymbolsShiftedKeyboard) {
-            mSymbolsShiftedKeyboard.setShifted(false);
-            setLatinKeyboard(mSymbolsKeyboard);
-            mSymbolsKeyboard.setShifted(false);
+        } else if (currentKeyboard != null && currentKeyboard == mSymbolsKeyboard) {
+            if (mSymbolsKeyboard != null) {
+                mSymbolsKeyboard.setShifted(true);
+            }
+            LatinKeyboard shifted = getSymbolsShiftedKeyboard();
+            setLatinKeyboard(shifted);
+            shifted.setShifted(true);
+        } else if (currentKeyboard != null && currentKeyboard == mSymbolsShiftedKeyboard) {
+            if (mSymbolsShiftedKeyboard != null) {
+                mSymbolsShiftedKeyboard.setShifted(false);
+            }
+            LatinKeyboard sym = getSymbolsKeyboard();
+            setLatinKeyboard(sym);
+            sym.setShifted(false);
         }
     }
     
@@ -1212,7 +1318,7 @@ public class SoftKeyboard extends InputMethodService
         header.addView(titleView, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f));
 
         TextView versionBadge = new TextView(context);
-        versionBadge.setText("v1.0");
+        versionBadge.setText("v1.1.dev");
         versionBadge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
         versionBadge.setTypeface(Typeface.DEFAULT_BOLD);
         versionBadge.setTextColor(tc.accentColor);
@@ -1540,6 +1646,11 @@ public class SoftKeyboard extends InputMethodService
     }
 
     private void refreshTopBar() {
+        if (!isInputViewShown()) {
+            mTopBarDirty = true;
+            return;
+        }
+        mTopBarDirty = false;
         if (mTopBarChipsContainer == null) return;
         Context context = getThemedContext();
         float density = context.getResources().getDisplayMetrics().density;
@@ -1807,8 +1918,8 @@ public class SoftKeyboard extends InputMethodService
     }
 
     private void toggleClipboardPanel() {
-        if (mClipboardPanelView == null || mInputView == null) return;
-        if (mClipboardPanelView.getVisibility() == View.VISIBLE) {
+        if (mInputView == null) return;
+        if (mClipboardPanelView != null && mClipboardPanelView.getVisibility() == View.VISIBLE) {
             hideClipboardPanel();
         } else {
             showClipboardPanel();
@@ -1816,9 +1927,13 @@ public class SoftKeyboard extends InputMethodService
     }
 
     private void showClipboardPanel() {
-        if (mClipboardPanelView == null || mInputView == null) return;
+        if (mInputView == null || mContainerView == null) return;
+        if (mClipboardPanelView == null) {
+            mClipboardPanelView = buildClipboardPanelView(getThemedContext());
+            mContainerView.addView(mClipboardPanelView);
+        }
         int h = 0;
-        if (mInputView != null && mInputView.getHeight() > 0) {
+        if (mInputView.getHeight() > 0) {
             h = mInputView.getHeight();
         } else if (mCurKeyboard != null && mCurKeyboard.getHeight() > 0) {
             h = mCurKeyboard.getHeight();
@@ -1837,9 +1952,14 @@ public class SoftKeyboard extends InputMethodService
     }
 
     private void hideClipboardPanel() {
-        if (mClipboardPanelView == null || mInputView == null) return;
+        if (mClipboardPanelView == null) return;
         mClipboardPanelView.setVisibility(View.GONE);
-        mInputView.setVisibility(View.VISIBLE);
+        if (mClipboardItemsLayout != null) {
+            mClipboardItemsLayout.removeAllViews();
+        }
+        if (mInputView != null) {
+            mInputView.setVisibility(View.VISIBLE);
+        }
     }
 
     private void updateClipboardFromSystem() {
@@ -1859,6 +1979,10 @@ public class SoftKeyboard extends InputMethodService
                 }
             }
         } catch (Throwable ignored) {}
+        if (!isInputViewShown()) {
+            mTopBarDirty = true;
+            return;
+        }
         refreshTopBar();
         if (mClipboardPanelView != null && mClipboardPanelView.getVisibility() == View.VISIBLE) {
             updateClipboardPanel();

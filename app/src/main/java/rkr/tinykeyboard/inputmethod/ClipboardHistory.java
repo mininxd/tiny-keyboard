@@ -11,8 +11,11 @@ public class ClipboardHistory {
     private static final String PREFS_NAME = "tiny_keyboard_prefs";
     private static final String PREF_CLIPS = "clipboard_history_items";
     private static final String PREF_USED_CLIPS = "used_clipboard_items";
-    private static final int MAX_CLIPS = 25;
-    private static final int MAX_CHAR_LENGTH = 5000;
+    private static final int MAX_CLIPS = 10;
+    private static final int MAX_CHAR_LENGTH = 1000;
+
+    private static List<String> sCachedClips = null;
+    private static List<String> sCachedUsed = null;
 
     private static List<String> readList(Context context, String key) {
         List<String> list = new ArrayList<String>();
@@ -42,33 +45,49 @@ public class ClipboardHistory {
         } catch (Throwable ignored) {}
     }
 
+    public static synchronized void trimMemory() {
+        sCachedClips = null;
+        sCachedUsed = null;
+    }
+
     public static synchronized List<String> getClips(Context context) {
-        return readList(context, PREF_CLIPS);
+        if (sCachedClips == null) {
+            sCachedClips = readList(context, PREF_CLIPS);
+        }
+        return new ArrayList<String>(sCachedClips);
     }
 
     public static synchronized void markClipUsed(Context context, String text) {
         if (context == null || text == null) return;
-        List<String> used = readList(context, PREF_USED_CLIPS);
-        if (!used.contains(text)) {
-            used.add(text);
-            writeList(context, PREF_USED_CLIPS, used);
+        if (sCachedUsed == null) {
+            sCachedUsed = readList(context, PREF_USED_CLIPS);
+        }
+        if (!sCachedUsed.contains(text)) {
+            sCachedUsed.add(text);
+            writeList(context, PREF_USED_CLIPS, sCachedUsed);
         }
     }
 
     public static synchronized void unmarkClipUsed(Context context, String text) {
         if (context == null || text == null) return;
-        List<String> used = readList(context, PREF_USED_CLIPS);
-        if (used.remove(text)) {
-            writeList(context, PREF_USED_CLIPS, used);
+        if (sCachedUsed == null) {
+            sCachedUsed = readList(context, PREF_USED_CLIPS);
+        }
+        if (sCachedUsed.remove(text)) {
+            writeList(context, PREF_USED_CLIPS, sCachedUsed);
         }
     }
 
     public static synchronized List<String> getTopBarClips(Context context) {
-        List<String> all = getClips(context);
-        List<String> used = readList(context, PREF_USED_CLIPS);
+        if (sCachedClips == null) {
+            sCachedClips = readList(context, PREF_CLIPS);
+        }
+        if (sCachedUsed == null) {
+            sCachedUsed = readList(context, PREF_USED_CLIPS);
+        }
         List<String> result = new ArrayList<String>();
-        for (String s : all) {
-            if (!used.contains(s)) {
+        for (String s : sCachedClips) {
+            if (!sCachedUsed.contains(s)) {
                 result.add(s);
             }
         }
@@ -84,13 +103,15 @@ public class ClipboardHistory {
         }
 
         try {
-            List<String> current = getClips(context);
-            current.remove(text);
-            current.add(0, text);
-            while (current.size() > MAX_CLIPS) {
-                current.remove(current.size() - 1);
+            if (sCachedClips == null) {
+                sCachedClips = readList(context, PREF_CLIPS);
             }
-            writeList(context, PREF_CLIPS, current);
+            sCachedClips.remove(text);
+            sCachedClips.add(0, text);
+            while (sCachedClips.size() > MAX_CLIPS) {
+                sCachedClips.remove(sCachedClips.size() - 1);
+            }
+            writeList(context, PREF_CLIPS, sCachedClips);
             unmarkClipUsed(context, text);
         } catch (Throwable ignored) {}
     }
@@ -98,9 +119,11 @@ public class ClipboardHistory {
     public static synchronized void removeClip(Context context, String text) {
         if (context == null || text == null) return;
         try {
-            List<String> current = getClips(context);
-            if (current.remove(text)) {
-                writeList(context, PREF_CLIPS, current);
+            if (sCachedClips == null) {
+                sCachedClips = readList(context, PREF_CLIPS);
+            }
+            if (sCachedClips.remove(text)) {
+                writeList(context, PREF_CLIPS, sCachedClips);
             }
             unmarkClipUsed(context, text);
         } catch (Throwable ignored) {}
@@ -109,14 +132,18 @@ public class ClipboardHistory {
     public static synchronized void clear(Context context) {
         if (context == null) return;
         try {
-            writeList(context, PREF_CLIPS, new ArrayList<String>());
+            sCachedClips = new ArrayList<String>();
+            sCachedUsed = new ArrayList<String>();
+            writeList(context, PREF_CLIPS, sCachedClips);
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                     .edit().remove(PREF_USED_CLIPS).apply();
         } catch (Throwable ignored) {}
     }
 
     public static synchronized String getLatestClip(Context context) {
-        List<String> clips = getClips(context);
-        return clips.isEmpty() ? null : clips.get(0);
+        if (sCachedClips == null) {
+            sCachedClips = readList(context, PREF_CLIPS);
+        }
+        return sCachedClips.isEmpty() ? null : sCachedClips.get(0);
     }
 }
