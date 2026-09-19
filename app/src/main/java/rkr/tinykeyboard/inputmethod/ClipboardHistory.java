@@ -4,12 +4,15 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import org.json.JSONArray;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class ClipboardHistory {
 
     private static final String PREFS_NAME = "tiny_keyboard_prefs";
     private static final String PREF_CLIPS = "clipboard_history_items";
+    private static final String PREF_USED_CLIPS = "used_clipboard_items";
     private static final int MAX_CLIPS = 25;
     private static final int MAX_CHAR_LENGTH = 5000;
 
@@ -28,6 +31,48 @@ public class ClipboardHistory {
             }
         } catch (Throwable ignored) {}
         return list;
+    }
+
+    public static synchronized Set<String> getUsedClips(Context context) {
+        if (context == null) return new HashSet<String>();
+        try {
+            SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            return new HashSet<String>(prefs.getStringSet(PREF_USED_CLIPS, new HashSet<String>()));
+        } catch (Throwable ignored) {}
+        return new HashSet<String>();
+    }
+
+    public static synchronized void markClipUsed(Context context, String text) {
+        if (context == null || text == null) return;
+        try {
+            Set<String> used = getUsedClips(context);
+            used.add(text);
+            SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            prefs.edit().putStringSet(PREF_USED_CLIPS, used).apply();
+        } catch (Throwable ignored) {}
+    }
+
+    public static synchronized void unmarkClipUsed(Context context, String text) {
+        if (context == null || text == null) return;
+        try {
+            Set<String> used = getUsedClips(context);
+            if (used.remove(text)) {
+                SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+                prefs.edit().putStringSet(PREF_USED_CLIPS, used).apply();
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    public static synchronized List<String> getTopBarClips(Context context) {
+        List<String> all = getClips(context);
+        Set<String> used = getUsedClips(context);
+        List<String> result = new ArrayList<String>();
+        for (String s : all) {
+            if (!used.contains(s)) {
+                result.add(s);
+            }
+        }
+        return result;
     }
 
     public static synchronized void addClip(Context context, String text) {
@@ -49,6 +94,7 @@ public class ClipboardHistory {
             }
 
             saveClips(context, current);
+            unmarkClipUsed(context, text);
         } catch (Throwable ignored) {}
     }
 
@@ -59,6 +105,7 @@ public class ClipboardHistory {
             if (current.remove(text)) {
                 saveClips(context, current);
             }
+            unmarkClipUsed(context, text);
         } catch (Throwable ignored) {}
     }
 
@@ -66,6 +113,8 @@ public class ClipboardHistory {
         if (context == null) return;
         try {
             saveClips(context, new ArrayList<String>());
+            SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            prefs.edit().remove(PREF_USED_CLIPS).apply();
         } catch (Throwable ignored) {}
     }
 

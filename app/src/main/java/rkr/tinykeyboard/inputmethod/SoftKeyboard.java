@@ -246,6 +246,8 @@ public class SoftKeyboard extends InputMethodService
         mInputView.setOnTouchListener(new View.OnTouchListener() {
             private float mDownX;
             private float mDownY;
+            private float mDownRawX;
+            private float mDownRawY;
             private boolean mSwipeHandled;
             private boolean mIsSpaceSliding;
             private float mLastSlideX;
@@ -258,6 +260,8 @@ public class SoftKeyboard extends InputMethodService
                     case MotionEvent.ACTION_DOWN:
                         mDownX = event.getX();
                         mDownY = event.getY();
+                        mDownRawX = event.getRawX();
+                        mDownRawY = event.getRawY();
                         mSwipeHandled = false;
                         mIsSpaceSliding = false;
                         mAccumulatedSlideDelta = 0f;
@@ -272,18 +276,25 @@ public class SoftKeyboard extends InputMethodService
                             }
                         }
                         break;
+                    case MotionEvent.ACTION_POINTER_DOWN:
+                        int downIndex = event.getActionIndex();
+                        mDownX = event.getX(downIndex);
+                        mDownY = event.getY(downIndex);
+                        mDownRawX = event.getRawX();
+                        mDownRawY = event.getRawY();
+                        break;
                     case MotionEvent.ACTION_MOVE:
                         if (mSwipeHandled) {
                             return true;
                         }
-                        float dx = event.getX() - mDownX;
-                        float dy = event.getY() - mDownY;
+                        float dx = event.getRawX() - mDownRawX;
+                        float dy = event.getRawY() - mDownRawY;
                         float density = v.getResources().getDisplayMetrics().density;
 
                         if (mSpaceSlideEnabled && (mStartedOnSpace || mLastPressedKey == 32 || mIsSpaceSliding)) {
                             if (mIsSpaceSliding) {
-                                float deltaX = event.getX() - mLastSlideX;
-                                mLastSlideX = event.getX();
+                                float deltaX = event.getRawX() - mLastSlideX;
+                                mLastSlideX = event.getRawX();
                                 mAccumulatedSlideDelta += deltaX;
                                 float stepDp = 36f - (mSlideSensitivity * 0.24f);
                                 float stepPx = Math.max(8 * density, stepDp * density);
@@ -301,7 +312,7 @@ public class SoftKeyboard extends InputMethodService
                                 if (Math.abs(dx) > startThreshold && Math.abs(dx) > Math.abs(dy) * 1.1f) {
                                     mIsSpaceSliding = true;
                                     mLastPressedKey = 0;
-                                    mLastSlideX = event.getX();
+                                    mLastSlideX = event.getRawX();
                                     mAccumulatedSlideDelta = 0f;
                                     cancelTouchOnView(v, event);
                                     moveCursor(dx > 0 ? 1 : -1);
@@ -337,8 +348,26 @@ public class SoftKeyboard extends InputMethodService
                                 return true;
                             }
                         }
+                        if (event.getPointerCount() == 1) {
+                            event.setLocation(mDownX, mDownY);
+                        }
                         break;
                     case MotionEvent.ACTION_UP:
+                        if (mIsSpaceSliding) {
+                            mIsSpaceSliding = false;
+                            mStartedOnSpace = false;
+                            mLastPressedKey = 0;
+                            return true;
+                        }
+                        if (mSwipeHandled) {
+                            mSwipeHandled = false;
+                            return true;
+                        }
+                        mStartedOnSpace = false;
+                        if (event.getPointerCount() == 1) {
+                            event.setLocation(mDownX, mDownY);
+                        }
+                        break;
                     case MotionEvent.ACTION_CANCEL:
                         if (mIsSpaceSliding) {
                             mIsSpaceSliding = false;
@@ -350,6 +379,7 @@ public class SoftKeyboard extends InputMethodService
                             mSwipeHandled = false;
                             return true;
                         }
+                        mStartedOnSpace = false;
                         break;
                 }
                 return false;
@@ -1267,7 +1297,7 @@ public class SoftKeyboard extends InputMethodService
 
         mTopBarChipsContainer.removeAllViews();
 
-        List<String> clips = ClipboardHistory.getClips(this);
+        List<String> clips = ClipboardHistory.getTopBarClips(this);
         if (clips.isEmpty()) return;
 
         // 1. Prominent Quick-Paste Pill (for the latest clip)
@@ -1302,6 +1332,8 @@ public class SoftKeyboard extends InputMethodService
                 ic.commitText(latest, 1);
                 updateShiftKeyState(getCurrentInputEditorInfo());
             }
+            ClipboardHistory.markClipUsed(SoftKeyboard.this, latest);
+            refreshTopBar();
             vibrate(mVibrateDuration);
         });
         mTopBarChipsContainer.addView(pill);
@@ -1334,6 +1366,8 @@ public class SoftKeyboard extends InputMethodService
                     ic.commitText(clip, 1);
                     updateShiftKeyState(getCurrentInputEditorInfo());
                 }
+                ClipboardHistory.markClipUsed(SoftKeyboard.this, clip);
+                refreshTopBar();
                 vibrate(mVibrateDuration);
             });
             mTopBarChipsContainer.addView(subPill);
@@ -1512,6 +1546,8 @@ public class SoftKeyboard extends InputMethodService
                     ic.commitText(clipText, 1);
                     updateShiftKeyState(getCurrentInputEditorInfo());
                 }
+                ClipboardHistory.markClipUsed(SoftKeyboard.this, clipText);
+                refreshTopBar();
                 vibrate(mVibrateDuration);
                 hideClipboardPanel();
             });
