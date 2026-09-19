@@ -56,11 +56,13 @@ import android.widget.CheckBox;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
+import android.widget.PopupWindow;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.TextView;
+import java.lang.reflect.Field;
 import java.util.List;
 
 public class SoftKeyboard extends InputMethodService
@@ -247,6 +249,14 @@ public class SoftKeyboard extends InputMethodService
         mInputView = (KeyboardView) LayoutInflater.from(context).inflate(layoutRes, null);
         mInputView.setOnKeyboardActionListener(this);
         mInputView.setPreviewEnabled(mKeyPreviewEnabled);
+        try {
+            Field f = KeyboardView.class.getDeclaredField("mPreviewPopup");
+            f.setAccessible(true);
+            PopupWindow pw = (PopupWindow) f.get(mInputView);
+            if (pw != null) {
+                pw.setAnimationStyle(0);
+            }
+        } catch (Throwable ignored) {}
         mInputView.setOnTouchListener(new View.OnTouchListener() {
             private float mDownX;
             private float mDownY;
@@ -803,14 +813,28 @@ public class SoftKeyboard extends InputMethodService
         }
     }
     
+    private boolean isActionKey(int code) {
+        return code < 0 || code == 32;
+    }
+
     public void onPress(int primaryCode) {
         mLastPressedKey = primaryCode;
+        if (mInputView != null) {
+            if (isActionKey(primaryCode)) {
+                mInputView.setPreviewEnabled(false);
+            } else {
+                mInputView.setPreviewEnabled(mKeyPreviewEnabled);
+            }
+        }
         vibrate(mVibrateDuration);
     }
     
     public void onRelease(int primaryCode) {
         if (mLastPressedKey == primaryCode) {
             mLastPressedKey = 0;
+        }
+        if (mInputView != null && isActionKey(primaryCode)) {
+            mInputView.setPreviewEnabled(mKeyPreviewEnabled);
         }
     }
 
