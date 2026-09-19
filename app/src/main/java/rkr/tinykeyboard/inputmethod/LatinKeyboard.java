@@ -94,6 +94,10 @@ public class LatinKeyboard extends Keyboard {
         return key;
     }
 
+    public Key getSpaceKey() {
+        return mSpaceKey;
+    }
+
     void setLanguageSwitchKeyVisibility(boolean visible) {
         if (mSpaceKey == null || mLanguageSwitchKey == null) {
             return;

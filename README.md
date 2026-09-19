@@ -12,7 +12,9 @@
 
 ## Features
 
-- **Gboard-Style Clipboard Toolbar**: Quick-paste strip above the keyboard with 1-tap paste chips for copied snippets, recent clipboard history, quick text actions (Select All, Cut, Copy, Paste), full clipboard manager view with deletion/clear, and direct settings access (toggleable in Settings).
+- **Clipboard Toolbar**: Clean top toolbar with a clipboard button (`📋`) to open the full clipboard history drawer for 1-tap pasting and clear-all (toggleable in Settings).
+- **Spacebar Cursor Slide**: Scroll / slide left and right on the spacebar to move the typing cursor left and right through text with subtle haptic ticks. Includes an adjustable sliding sensitivity slider in Settings.
+- **Lowercase as Default**: Starts and types in lowercase by default, avoiding unwanted auto-capitalization (with an optional auto-capitalization toggle in Settings).
 - **Material 3 UI**: Clean, rounded key cards with native state feedback and zero legacy text shadows.
 - **Theme Selection**: Choose between **Legacy** (classic AOSP style, default), **Auto** (follows system dark mode), **Light**, or **Dark** themes.
 - **Auto & Adjustable Height**: Automatically scales proportionally to the display size (`8%p` per row in portrait, `13%p` in landscape).
@@ -20,7 +22,7 @@
 - **High Contrast & Depth**: Toggle 3D key depth effects with elevated bottom shadow lips and high-contrast keycard borders.
 - **Gboard-Style Symbols**: Muscle-memory layout matching standard Gboard positions for `?`, `!`, `"`, `'`, `:`, `;`, `*`, `(`, `)`, etc.
 - **Swipe Letter for Case**: Swipe up on any letter key to type uppercase, or swipe down to type lowercase (optional, toggleable in Settings).
-- **Quick Settings Dialog**: Slide upward on the `.` (dot) key to access the compact in-keyboard settings menu to toggle swipe case, adjust haptics & vibration duration, toggle high contrast & depth, adjust keyboard height (70% – 130%), and pick your theme.
+- **Quick Settings Dialog**: Slide upward on the `.` (dot) key to access the compact in-keyboard settings menu to configure haptics, sliding sensitivity, height, themes, and more.
 
 ## How it's made
 
