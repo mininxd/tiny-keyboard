@@ -62,6 +62,7 @@ import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
+import android.widget.Switch;
 import android.widget.TextView;
 import java.lang.reflect.Field;
 import java.util.List;
@@ -948,6 +949,179 @@ public class SoftKeyboard extends InputMethodService
         }
     }
 
+    private interface ToggleListener {
+        void onToggle(boolean isChecked);
+    }
+
+    private interface SliderListener {
+        void onProgress(int progress, boolean fromUser);
+    }
+
+    private View createSectionHeader(Context context, String title, int accentColor, float density) {
+        TextView tv = new TextView(context);
+        tv.setText(title);
+        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        tv.setTypeface(Typeface.DEFAULT_BOLD);
+        tv.setTextColor(accentColor);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            tv.setLetterSpacing(0.06f);
+        }
+        tv.setPadding((int) (6 * density), (int) (10 * density), (int) (6 * density), (int) (4 * density));
+        return tv;
+    }
+
+    private View createSectionDivider(Context context, int dividerColor, float density) {
+        View v = new View(context);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, (int) (1 * density)));
+        lp.setMargins((int) (6 * density), (int) (8 * density), (int) (6 * density), (int) (2 * density));
+        v.setLayoutParams(lp);
+        v.setBackgroundColor(dividerColor);
+        return v;
+    }
+
+    private View createCompactToggleRow(Context context, String title, String subtitle, boolean initialChecked,
+            int onSurfaceColor, int onSurfaceVariantColor, int accentColor, boolean dark, float density,
+            final ToggleListener listener, final boolean[] stateHolder) {
+        LinearLayout row = new LinearLayout(context);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding((int) (6 * density), (int) (6 * density), (int) (6 * density), (int) (6 * density));
+        row.setClickable(true);
+        row.setBackground(createPillDrawable(0, dark ? 0x1AFFFFFF : 0x0F000000, 0, 8 * density));
+
+        LinearLayout textCol = new LinearLayout(context);
+        textCol.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams textLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
+        textCol.setLayoutParams(textLp);
+
+        TextView titleTv = new TextView(context);
+        titleTv.setText(title);
+        titleTv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f);
+        titleTv.setTextColor(onSurfaceColor);
+        titleTv.setTypeface(Typeface.DEFAULT_BOLD);
+        textCol.addView(titleTv);
+
+        if (subtitle != null && subtitle.length() > 0) {
+            TextView subTv = new TextView(context);
+            subTv.setText(subtitle);
+            subTv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f);
+            subTv.setTextColor(onSurfaceVariantColor);
+            subTv.setPadding(0, (int) (1 * density), 0, 0);
+            textCol.addView(subTv);
+        }
+        row.addView(textCol);
+
+        final Switch sw = new Switch(context);
+        sw.setChecked(initialChecked);
+        stateHolder[0] = initialChecked;
+        sw.setClickable(false);
+        sw.setFocusable(false);
+        sw.setTextOn("");
+        sw.setTextOff("");
+        sw.setText(null);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            sw.setShowText(false);
+            ColorStateList thumbTint = new ColorStateList(
+                new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}},
+                new int[]{accentColor, dark ? 0xFF9E9E9E : 0xFFBDBDBD}
+            );
+            sw.setThumbTintList(thumbTint);
+            ColorStateList trackTint = new ColorStateList(
+                new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}},
+                new int[]{dark ? 0x6682B1FF : 0x550061A4, dark ? 0x33FFFFFF : 0x24000000}
+            );
+            sw.setTrackTintList(trackTint);
+        }
+        row.addView(sw);
+
+        row.setOnClickListener(v -> {
+            boolean next = !sw.isChecked();
+            sw.setChecked(next);
+            stateHolder[0] = next;
+            if (listener != null) {
+                listener.onToggle(next);
+            }
+        });
+
+        return row;
+    }
+
+    private View createCompactSlider(Context context, String label, String valueSuffix,
+            int min, int max, int currentVal, int onSurfaceColor, int onSurfaceVariantColor,
+            int accentColor, float density, final int[] valueHolder, final SliderListener listener) {
+        LinearLayout block = new LinearLayout(context);
+        block.setOrientation(LinearLayout.VERTICAL);
+        block.setPadding((int) (6 * density), (int) (4 * density), (int) (6 * density), (int) (4 * density));
+
+        LinearLayout row = new LinearLayout(context);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView labelTv = new TextView(context);
+        labelTv.setText(label);
+        labelTv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f);
+        labelTv.setTextColor(onSurfaceVariantColor);
+        row.addView(labelTv, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f));
+
+        final TextView valTv = new TextView(context);
+        valTv.setText(currentVal + valueSuffix);
+        valTv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f);
+        valTv.setTypeface(Typeface.DEFAULT_BOLD);
+        valTv.setTextColor(accentColor);
+        row.addView(valTv);
+
+        block.addView(row);
+
+        SeekBar bar = new SeekBar(context);
+        bar.setMax(max - min);
+        bar.setProgress(currentVal - min);
+        valueHolder[0] = currentVal;
+        bar.setPadding((int) (4 * density), (int) (2 * density), (int) (4 * density), (int) (2 * density));
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            ColorStateList tint = ColorStateList.valueOf(accentColor);
+            bar.setProgressTintList(tint);
+            bar.setThumbTintList(tint);
+        }
+
+        bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                int actual = min + progress;
+                valueHolder[0] = actual;
+                valTv.setText(actual + valueSuffix);
+                if (listener != null) {
+                    listener.onProgress(actual, fromUser);
+                }
+            }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+
+        block.addView(bar);
+        return block;
+    }
+
+    private void updateThemeTabs(TextView[] tabs, String[] keys, String activeKey, int accentColor, int onSurfaceColor, int onSurfaceVariantColor, boolean dark, float density) {
+        for (int i = 0; i < tabs.length; i++) {
+            boolean isSel = keys[i].equals(activeKey);
+            if (isSel) {
+                GradientDrawable selBg = new GradientDrawable();
+                selBg.setCornerRadius(15 * density);
+                selBg.setColor(accentColor);
+                tabs[i].setBackground(selBg);
+                tabs[i].setTextColor(dark ? 0xFF001F3F : 0xFFFFFFFF);
+                tabs[i].setTypeface(Typeface.DEFAULT_BOLD);
+            } else {
+                tabs[i].setBackground(null);
+                tabs[i].setTextColor(onSurfaceVariantColor);
+                tabs[i].setTypeface(Typeface.DEFAULT);
+            }
+        }
+    }
+
     private void showSettingsDialog() {
         IBinder token = null;
         if (mRootView != null && mRootView.getWindowToken() != null) {
@@ -975,297 +1149,173 @@ public class SoftKeyboard extends InputMethodService
 
         Context context = getDisplayContext();
         float density = context.getResources().getDisplayMetrics().density;
-
-        boolean isNight = (context.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
-        boolean dark = "dark".equals(currentTheme) || ("auto".equals(currentTheme) && isNight) || "legacy".equals(currentTheme);
-
-        int surfaceColor = dark ? 0xFF211F26 : 0xFFF3F4F9;
-        int onSurfaceColor = dark ? 0xFFE6E1E5 : 0xFF1B1B1F;
-        int onSurfaceVariantColor = dark ? 0xFFC4C7D0 : 0xFF44474E;
-        int accentColor = dark ? 0xFF82B1FF : 0xFF0061A4;
+        ThemeColors tc = getThemeColors();
 
         AlertDialog.Builder builder = new AlertDialog.Builder(context);
 
         int padH = (int) (18 * density);
-        int padV = (int) (6 * density);
 
-        TextView customTitle = new TextView(context);
-        customTitle.setText("Tiny Keyboard Settings");
-        customTitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
-        customTitle.setTypeface(Typeface.DEFAULT_BOLD);
-        customTitle.setTextColor(onSurfaceColor);
-        customTitle.setPadding(padH, (int) (16 * density), padH, (int) (4 * density));
-        builder.setCustomTitle(customTitle);
+        // Header: Settings + v0.9 badge
+        LinearLayout header = new LinearLayout(context);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setPadding(padH, (int) (16 * density), padH, (int) (6 * density));
+
+        TextView titleView = new TextView(context);
+        titleView.setText("Settings");
+        titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
+        titleView.setTypeface(Typeface.DEFAULT_BOLD);
+        titleView.setTextColor(tc.onSurfaceColor);
+        header.addView(titleView, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f));
+
+        TextView versionBadge = new TextView(context);
+        versionBadge.setText("v0.9");
+        versionBadge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        versionBadge.setTypeface(Typeface.DEFAULT_BOLD);
+        versionBadge.setTextColor(tc.accentColor);
+        GradientDrawable badgeBg = new GradientDrawable();
+        badgeBg.setColor(tc.isDark ? 0x3382B1FF : 0x220061A4);
+        badgeBg.setCornerRadius(10 * density);
+        versionBadge.setBackground(badgeBg);
+        int badgePadH = (int) (8 * density);
+        int badgePadV = (int) (2.5f * density);
+        versionBadge.setPadding(badgePadH, badgePadV, badgePadH, badgePadV);
+        header.addView(versionBadge);
+
+        builder.setCustomTitle(header);
 
         ScrollView scrollView = new ScrollView(context);
         scrollView.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
         LinearLayout layout = new LinearLayout(context);
         layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(padH, padV, padH, padV);
+        layout.setPadding(padH, (int) (2 * density), padH, (int) (8 * density));
         scrollView.addView(layout);
 
-        final CheckBox hapticCheck = new CheckBox(context);
-        hapticCheck.setText("Haptic feedback");
-        hapticCheck.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        hapticCheck.setTextColor(onSurfaceColor);
-        hapticCheck.setMinimumHeight(0);
-        hapticCheck.setPadding(hapticCheck.getPaddingLeft(), (int) (3 * density), hapticCheck.getPaddingRight(), (int) (3 * density));
-        hapticCheck.setChecked(currentHaptic);
-        layout.addView(hapticCheck);
+        // SECTION 1: TYPING & LAYOUT
+        layout.addView(createSectionHeader(context, "TYPING & LAYOUT", tc.accentColor, density));
 
-        final TextView vibrateLabel = new TextView(context);
-        vibrateLabel.setText("Vibration duration: " + currentVibrateDuration + "ms");
-        vibrateLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-        vibrateLabel.setTextColor(onSurfaceVariantColor);
-        vibrateLabel.setPadding((int) (2 * density), (int) (3 * density), 0, (int) (1 * density));
-        layout.addView(vibrateLabel);
+        final boolean[] numberRowHolder = new boolean[]{currentNumberRow};
+        layout.addView(createCompactToggleRow(context, "Number row", "Top row for digits (1–0)", currentNumberRow,
+                tc.onSurfaceColor, tc.onSurfaceVariantColor, tc.accentColor, tc.isDark, density, null, numberRowHolder));
 
-        final SeekBar vibrateBar = new SeekBar(context);
-        vibrateBar.setMax(95); // 5ms to 100ms
-        vibrateBar.setProgress(currentVibrateDuration - 5);
-        vibrateBar.setEnabled(currentHaptic);
-        vibrateBar.setPadding((int) (4 * density), (int) (2 * density), (int) (4 * density), (int) (2 * density));
-        vibrateBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                int duration = 5 + progress;
-                vibrateLabel.setText("Vibration duration: " + duration + "ms");
-                if (fromUser && hapticCheck.isChecked()) {
-                    vibrate(duration);
-                }
-            }
-            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
-            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
-        });
-        layout.addView(vibrateBar);
+        final boolean[] keyPreviewHolder = new boolean[]{currentKeyPreview};
+        layout.addView(createCompactToggleRow(context, "Key popup preview", "Magnify letter on press", currentKeyPreview,
+                tc.onSurfaceColor, tc.onSurfaceVariantColor, tc.accentColor, tc.isDark, density, null, keyPreviewHolder));
 
-        hapticCheck.setOnCheckedChangeListener((btn, isChecked) -> {
-            vibrateBar.setEnabled(isChecked);
-            vibrateLabel.setAlpha(isChecked ? 1.0f : 0.5f);
-        });
-        if (!currentHaptic) {
-            vibrateLabel.setAlpha(0.5f);
-        }
+        final boolean[] spaceSlideHolder = new boolean[]{currentSpaceSlide};
+        final int[] slideSensHolder = new int[]{currentSlideSensitivity};
+        final View slideSensSlider = createCompactSlider(context, "Slide sensitivity", "%", 0, 100, currentSlideSensitivity,
+                tc.onSurfaceColor, tc.onSurfaceVariantColor, tc.accentColor, density, slideSensHolder, null);
+        slideSensSlider.setVisibility(currentSpaceSlide ? View.VISIBLE : View.GONE);
+        layout.addView(createCompactToggleRow(context, "Spacebar cursor slide", "Slide spacebar to move cursor", currentSpaceSlide,
+                tc.onSurfaceColor, tc.onSurfaceVariantColor, tc.accentColor, tc.isDark, density,
+                isChecked -> slideSensSlider.setVisibility(isChecked ? View.VISIBLE : View.GONE),
+                spaceSlideHolder));
+        layout.addView(slideSensSlider);
 
-        final CheckBox contrastCheck = new CheckBox(context);
-        contrastCheck.setText("High contrast");
-        contrastCheck.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        contrastCheck.setTextColor(onSurfaceColor);
-        contrastCheck.setMinimumHeight(0);
-        contrastCheck.setPadding(contrastCheck.getPaddingLeft(), (int) (3 * density), contrastCheck.getPaddingRight(), (int) (3 * density));
-        contrastCheck.setChecked(currentHighContrast);
-        layout.addView(contrastCheck);
+        final boolean[] clipboardBarHolder = new boolean[]{currentClipboardBar};
+        layout.addView(createCompactToggleRow(context, "Clipboard toolbar", "Quick-paste badges & drawer", currentClipboardBar,
+                tc.onSurfaceColor, tc.onSurfaceVariantColor, tc.accentColor, tc.isDark, density, null, clipboardBarHolder));
 
-        final CheckBox swipeCaseCheck = new CheckBox(context);
-        swipeCaseCheck.setText("Swipe letter for case (▲ Upper, ▼ Lower)");
-        swipeCaseCheck.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        swipeCaseCheck.setTextColor(onSurfaceColor);
-        swipeCaseCheck.setMinimumHeight(0);
-        swipeCaseCheck.setPadding(swipeCaseCheck.getPaddingLeft(), (int) (3 * density), swipeCaseCheck.getPaddingRight(), (int) (3 * density));
-        swipeCaseCheck.setChecked(currentSwipeCase);
-        layout.addView(swipeCaseCheck);
+        final boolean[] autoCapHolder = new boolean[]{currentAutoCap};
+        layout.addView(createCompactToggleRow(context, "Auto-capitalization", "Capitalize first word of sentences", currentAutoCap,
+                tc.onSurfaceColor, tc.onSurfaceVariantColor, tc.accentColor, tc.isDark, density, null, autoCapHolder));
 
-        final CheckBox autoCapCheck = new CheckBox(context);
-        autoCapCheck.setText("Auto-capitalization");
-        autoCapCheck.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        autoCapCheck.setTextColor(onSurfaceColor);
-        autoCapCheck.setMinimumHeight(0);
-        autoCapCheck.setPadding(autoCapCheck.getPaddingLeft(), (int) (3 * density), autoCapCheck.getPaddingRight(), (int) (3 * density));
-        autoCapCheck.setChecked(currentAutoCap);
-        layout.addView(autoCapCheck);
+        final boolean[] swipeCaseHolder = new boolean[]{currentSwipeCase};
+        layout.addView(createCompactToggleRow(context, "Swipe letter for case", "▲ Up for upper, ▼ Down for lower", currentSwipeCase,
+                tc.onSurfaceColor, tc.onSurfaceVariantColor, tc.accentColor, tc.isDark, density, null, swipeCaseHolder));
 
-        final CheckBox spaceSlideCheck = new CheckBox(context);
-        spaceSlideCheck.setText("Spacebar cursor slide");
-        spaceSlideCheck.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        spaceSlideCheck.setTextColor(onSurfaceColor);
-        spaceSlideCheck.setMinimumHeight(0);
-        spaceSlideCheck.setPadding(spaceSlideCheck.getPaddingLeft(), (int) (3 * density), spaceSlideCheck.getPaddingRight(), (int) (3 * density));
-        spaceSlideCheck.setChecked(currentSpaceSlide);
-        layout.addView(spaceSlideCheck);
+        // DIVIDER
+        layout.addView(createSectionDivider(context, tc.dividerColor, density));
 
-        final TextView slideSensLabel = new TextView(context);
-        slideSensLabel.setText("Slide sensitivity: " + currentSlideSensitivity + "%");
-        slideSensLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-        slideSensLabel.setTextColor(onSurfaceVariantColor);
-        slideSensLabel.setPadding((int) (2 * density), (int) (3 * density), 0, (int) (1 * density));
-        layout.addView(slideSensLabel);
+        // SECTION 2: APPEARANCE
+        layout.addView(createSectionHeader(context, "APPEARANCE", tc.accentColor, density));
 
-        final SeekBar slideSensBar = new SeekBar(context);
-        slideSensBar.setMax(100);
-        slideSensBar.setProgress(currentSlideSensitivity);
-        slideSensBar.setEnabled(currentSpaceSlide);
-        slideSensBar.setPadding((int) (4 * density), (int) (2 * density), (int) (4 * density), (int) (2 * density));
-        slideSensBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                slideSensLabel.setText("Slide sensitivity: " + progress + "%");
-            }
-            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
-            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
-        });
-        layout.addView(slideSensBar);
-
-        spaceSlideCheck.setOnCheckedChangeListener((btn, isChecked) -> {
-            slideSensBar.setEnabled(isChecked);
-            slideSensLabel.setAlpha(isChecked ? 1.0f : 0.5f);
-        });
-        if (!currentSpaceSlide) {
-            slideSensLabel.setAlpha(0.5f);
-        }
-
-        final CheckBox clipboardBarCheck = new CheckBox(context);
-        clipboardBarCheck.setText("Clipboard toolbar");
-        clipboardBarCheck.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        clipboardBarCheck.setTextColor(onSurfaceColor);
-        clipboardBarCheck.setMinimumHeight(0);
-        clipboardBarCheck.setPadding(clipboardBarCheck.getPaddingLeft(), (int) (3 * density), clipboardBarCheck.getPaddingRight(), (int) (3 * density));
-        clipboardBarCheck.setChecked(currentClipboardBar);
-        layout.addView(clipboardBarCheck);
-
-        final CheckBox keyPreviewCheck = new CheckBox(context);
-        keyPreviewCheck.setText("Key popup preview");
-        keyPreviewCheck.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        keyPreviewCheck.setTextColor(onSurfaceColor);
-        keyPreviewCheck.setMinimumHeight(0);
-        keyPreviewCheck.setPadding(keyPreviewCheck.getPaddingLeft(), (int) (3 * density), keyPreviewCheck.getPaddingRight(), (int) (3 * density));
-        keyPreviewCheck.setChecked(currentKeyPreview);
-        layout.addView(keyPreviewCheck);
-
-        final CheckBox numberRowCheck = new CheckBox(context);
-        numberRowCheck.setText("Number row on top");
-        numberRowCheck.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        numberRowCheck.setTextColor(onSurfaceColor);
-        numberRowCheck.setMinimumHeight(0);
-        numberRowCheck.setPadding(numberRowCheck.getPaddingLeft(), (int) (3 * density), numberRowCheck.getPaddingRight(), (int) (3 * density));
-        numberRowCheck.setChecked(currentNumberRow);
-        layout.addView(numberRowCheck);
-
-        final TextView themeLabel = new TextView(context);
+        TextView themeLabel = new TextView(context);
         themeLabel.setText("Theme");
-        themeLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-        themeLabel.setTypeface(Typeface.DEFAULT_BOLD);
-        themeLabel.setTextColor(onSurfaceVariantColor);
-        themeLabel.setPadding((int) (2 * density), (int) (6 * density), 0, (int) (1 * density));
+        themeLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f);
+        themeLabel.setTextColor(tc.onSurfaceVariantColor);
+        themeLabel.setPadding((int) (6 * density), (int) (2 * density), (int) (6 * density), (int) (4 * density));
         layout.addView(themeLabel);
 
-        final RadioGroup themeGroup = new RadioGroup(context);
-        themeGroup.setOrientation(RadioGroup.VERTICAL);
+        // Theme Segmented Control
+        LinearLayout themeContainer = new LinearLayout(context);
+        themeContainer.setOrientation(LinearLayout.HORIZONTAL);
+        themeContainer.setPadding((int) (3 * density), (int) (3 * density), (int) (3 * density), (int) (3 * density));
+        GradientDrawable containerBg = new GradientDrawable();
+        containerBg.setCornerRadius(18 * density);
+        containerBg.setColor(tc.isDark ? 0xFF2A2830 : 0xFFE5E7EB);
+        themeContainer.setBackground(containerBg);
 
-        final RadioButton legacyBtn = new RadioButton(context);
-        legacyBtn.setId(1);
-        legacyBtn.setText("Legacy");
-        legacyBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        legacyBtn.setTextColor(onSurfaceColor);
-        legacyBtn.setMinimumHeight(0);
-        legacyBtn.setPadding(legacyBtn.getPaddingLeft(), (int) (2.5f * density), legacyBtn.getPaddingRight(), (int) (2.5f * density));
-        themeGroup.addView(legacyBtn);
+        final String[] themes = new String[]{"legacy", "auto", "light", "dark"};
+        final String[] themeLabels = new String[]{"Legacy", "Auto", "Light", "Dark"};
+        final TextView[] themeTabs = new TextView[4];
+        final String[] selectedTheme = new String[]{currentTheme};
 
-        final RadioButton autoBtn = new RadioButton(context);
-        autoBtn.setId(2);
-        autoBtn.setText("Auto");
-        autoBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        autoBtn.setTextColor(onSurfaceColor);
-        autoBtn.setMinimumHeight(0);
-        autoBtn.setPadding(autoBtn.getPaddingLeft(), (int) (2.5f * density), autoBtn.getPaddingRight(), (int) (2.5f * density));
-        themeGroup.addView(autoBtn);
-
-        final RadioButton lightBtn = new RadioButton(context);
-        lightBtn.setId(3);
-        lightBtn.setText("Light");
-        lightBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        lightBtn.setTextColor(onSurfaceColor);
-        lightBtn.setMinimumHeight(0);
-        lightBtn.setPadding(lightBtn.getPaddingLeft(), (int) (2.5f * density), lightBtn.getPaddingRight(), (int) (2.5f * density));
-        themeGroup.addView(lightBtn);
-
-        final RadioButton darkBtn = new RadioButton(context);
-        darkBtn.setId(4);
-        darkBtn.setText("Dark");
-        darkBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        darkBtn.setTextColor(onSurfaceColor);
-        darkBtn.setMinimumHeight(0);
-        darkBtn.setPadding(darkBtn.getPaddingLeft(), (int) (2.5f * density), darkBtn.getPaddingRight(), (int) (2.5f * density));
-        themeGroup.addView(darkBtn);
-
-        if ("auto".equals(currentTheme)) {
-            autoBtn.setChecked(true);
-        } else if ("light".equals(currentTheme)) {
-            lightBtn.setChecked(true);
-        } else if ("dark".equals(currentTheme)) {
-            darkBtn.setChecked(true);
-        } else {
-            legacyBtn.setChecked(true);
+        for (int i = 0; i < themes.length; i++) {
+            final int index = i;
+            TextView tab = new TextView(context);
+            tab.setText(themeLabels[i]);
+            tab.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f);
+            tab.setGravity(Gravity.CENTER);
+            tab.setPadding(0, (int) (6 * density), 0, (int) (6 * density));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
+            tab.setLayoutParams(lp);
+            tab.setClickable(true);
+            themeTabs[i] = tab;
+            tab.setOnClickListener(v -> {
+                selectedTheme[0] = themes[index];
+                updateThemeTabs(themeTabs, themes, selectedTheme[0], tc.accentColor, tc.onSurfaceColor, tc.onSurfaceVariantColor, tc.isDark, density);
+            });
+            themeContainer.addView(tab);
         }
-        layout.addView(themeGroup);
+        updateThemeTabs(themeTabs, themes, selectedTheme[0], tc.accentColor, tc.onSurfaceColor, tc.onSurfaceVariantColor, tc.isDark, density);
+        layout.addView(themeContainer);
 
-        final TextView heightLabel = new TextView(context);
-        heightLabel.setText("Keyboard height: " + currentHeight + "%");
-        heightLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-        heightLabel.setTypeface(Typeface.DEFAULT_BOLD);
-        heightLabel.setTextColor(onSurfaceVariantColor);
-        heightLabel.setPadding((int) (2 * density), (int) (6 * density), 0, (int) (1 * density));
-        layout.addView(heightLabel);
+        final int[] heightHolder = new int[]{currentHeight};
+        layout.addView(createCompactSlider(context, "Keyboard height", "%", 70, 130, currentHeight,
+                tc.onSurfaceColor, tc.onSurfaceVariantColor, tc.accentColor, density, heightHolder, null));
 
-        final SeekBar heightBar = new SeekBar(context);
-        heightBar.setMax(60); // 70% to 130%
-        heightBar.setProgress(currentHeight - 70);
-        heightBar.setPadding((int) (4 * density), (int) (2 * density), (int) (4 * density), (int) (2 * density));
-        heightBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                heightLabel.setText("Keyboard height: " + (70 + progress) + "%");
-            }
-            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
-            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
-        });
-        layout.addView(heightBar);
+        final boolean[] highContrastHolder = new boolean[]{currentHighContrast};
+        layout.addView(createCompactToggleRow(context, "High contrast & depth", "Elevated key borders & shadows", currentHighContrast,
+                tc.onSurfaceColor, tc.onSurfaceVariantColor, tc.accentColor, tc.isDark, density, null, highContrastHolder));
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            ColorStateList tint = ColorStateList.valueOf(accentColor);
-            hapticCheck.setButtonTintList(tint);
-            contrastCheck.setButtonTintList(tint);
-            swipeCaseCheck.setButtonTintList(tint);
-            autoCapCheck.setButtonTintList(tint);
-            spaceSlideCheck.setButtonTintList(tint);
-            slideSensBar.setProgressTintList(tint);
-            slideSensBar.setThumbTintList(tint);
-            clipboardBarCheck.setButtonTintList(tint);
-            keyPreviewCheck.setButtonTintList(tint);
-            numberRowCheck.setButtonTintList(tint);
-            legacyBtn.setButtonTintList(tint);
-            autoBtn.setButtonTintList(tint);
-            lightBtn.setButtonTintList(tint);
-            darkBtn.setButtonTintList(tint);
-            vibrateBar.setProgressTintList(tint);
-            vibrateBar.setThumbTintList(tint);
-            heightBar.setProgressTintList(tint);
-            heightBar.setThumbTintList(tint);
-        }
+        // DIVIDER
+        layout.addView(createSectionDivider(context, tc.dividerColor, density));
+
+        // SECTION 3: HAPTIC FEEDBACK
+        layout.addView(createSectionHeader(context, "HAPTIC FEEDBACK", tc.accentColor, density));
+
+        final boolean[] hapticHolder = new boolean[]{currentHaptic};
+        final int[] vibrateHolder = new int[]{currentVibrateDuration};
+        final View vibrateSlider = createCompactSlider(context, "Vibration duration", " ms", 5, 100, currentVibrateDuration,
+                tc.onSurfaceColor, tc.onSurfaceVariantColor, tc.accentColor, density, vibrateHolder,
+                (duration, fromUser) -> {
+                    if (fromUser && hapticHolder[0]) {
+                        vibrate(duration);
+                    }
+                });
+        vibrateSlider.setVisibility(currentHaptic ? View.VISIBLE : View.GONE);
+        layout.addView(createCompactToggleRow(context, "Haptic feedback", "Tactile feedback on keypress", currentHaptic,
+                tc.onSurfaceColor, tc.onSurfaceVariantColor, tc.accentColor, tc.isDark, density,
+                isChecked -> vibrateSlider.setVisibility(isChecked ? View.VISIBLE : View.GONE),
+                hapticHolder));
+        layout.addView(vibrateSlider);
 
         builder.setView(scrollView);
-        builder.setPositiveButton("OK", (dialog, which) -> {
-            boolean haptic = hapticCheck.isChecked();
-            int vibrateDuration = 5 + vibrateBar.getProgress();
-            boolean highContrast = contrastCheck.isChecked();
-            boolean swipeCase = swipeCaseCheck.isChecked();
-            boolean autoCap = autoCapCheck.isChecked();
-            boolean spaceSlide = spaceSlideCheck.isChecked();
-            int slideSensitivity = slideSensBar.getProgress();
-            boolean clipboardBar = clipboardBarCheck.isChecked();
-            boolean keyPreview = keyPreviewCheck.isChecked();
-            boolean numberRow = numberRowCheck.isChecked();
-            int height = 70 + heightBar.getProgress();
-            int checkedThemeId = themeGroup.getCheckedRadioButtonId();
-            String selectedTheme = "legacy";
-            if (checkedThemeId == 1) {
-                selectedTheme = "legacy";
-            } else if (checkedThemeId == 2) {
-                selectedTheme = "auto";
-            } else if (checkedThemeId == 3) {
-                selectedTheme = "light";
-            } else if (checkedThemeId == 4) {
-                selectedTheme = "dark";
-            }
+        builder.setPositiveButton("Save", (d, which) -> {
+            boolean haptic = hapticHolder[0];
+            int vibrateDuration = vibrateHolder[0];
+            boolean highContrast = highContrastHolder[0];
+            boolean swipeCase = swipeCaseHolder[0];
+            boolean autoCap = autoCapHolder[0];
+            boolean spaceSlide = spaceSlideHolder[0];
+            int slideSensitivity = slideSensHolder[0];
+            boolean clipboardBar = clipboardBarHolder[0];
+            boolean keyPreview = keyPreviewHolder[0];
+            boolean numberRow = numberRowHolder[0];
+            int height = heightHolder[0];
+            String selTheme = selectedTheme[0];
 
             prefs.edit()
                 .putBoolean(PREF_HAPTIC, haptic)
@@ -1279,7 +1329,7 @@ public class SoftKeyboard extends InputMethodService
                 .putBoolean(PREF_KEY_PREVIEW, keyPreview)
                 .putBoolean(PREF_NUMBER_ROW, numberRow)
                 .putInt(PREF_HEIGHT_SCALE, height)
-                .putString(PREF_THEME, selectedTheme)
+                .putString(PREF_THEME, selTheme)
                 .apply();
             mHapticEnabled = haptic;
             mVibrateDuration = vibrateDuration;
@@ -1303,8 +1353,8 @@ public class SoftKeyboard extends InputMethodService
         Window window = dialog.getWindow();
         if (window != null) {
             GradientDrawable dialogBg = new GradientDrawable();
-            dialogBg.setCornerRadius(28 * density);
-            dialogBg.setColor(surfaceColor);
+            dialogBg.setCornerRadius(24 * density);
+            dialogBg.setColor(tc.surfaceColor);
             window.setBackgroundDrawable(dialogBg);
 
             WindowManager.LayoutParams lp = window.getAttributes();
@@ -1318,11 +1368,11 @@ public class SoftKeyboard extends InputMethodService
         if (dialog instanceof AlertDialog) {
             AlertDialog ad = (AlertDialog) dialog;
             if (ad.getButton(AlertDialog.BUTTON_POSITIVE) != null) {
-                ad.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(accentColor);
+                ad.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(tc.accentColor);
                 ad.getButton(AlertDialog.BUTTON_POSITIVE).setTypeface(Typeface.DEFAULT_BOLD);
             }
             if (ad.getButton(AlertDialog.BUTTON_NEGATIVE) != null) {
-                ad.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(onSurfaceVariantColor);
+                ad.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(tc.onSurfaceVariantColor);
             }
         }
     }

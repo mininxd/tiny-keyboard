@@ -6,8 +6,8 @@ android {
         compileSdk 37
         minSdkVersion 15
         targetSdkVersion 37
-        versionCode 13
-        versionName "0.8"
+        versionCode 14
+        versionName "0.9"
     }
     signingConfigs {
         release {
