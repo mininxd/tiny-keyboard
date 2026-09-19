@@ -12,6 +12,7 @@
 
 ## Features
 
+- **Gboard-Style Clipboard Toolbar**: Quick-paste strip above the keyboard with 1-tap paste chips for copied snippets, recent clipboard history, quick text actions (Select All, Cut, Copy, Paste), full clipboard manager view with deletion/clear, and direct settings access (toggleable in Settings).
 - **Material 3 UI**: Clean, rounded key cards with native state feedback and zero legacy text shadows.
 - **Theme Selection**: Choose between **Legacy** (classic AOSP style, default), **Auto** (follows system dark mode), **Light**, or **Dark** themes.
 - **Auto & Adjustable Height**: Automatically scales proportionally to the display size (`8%p` per row in portrait, `13%p` in landscape).

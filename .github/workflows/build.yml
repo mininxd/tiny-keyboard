@@ -49,22 +49,16 @@ jobs:
           # Find release APK (signed or unsigned)
           RELEASE_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
 
-          # If release APK is unsigned, sign it with a release key
+          # If release APK is unsigned, sign it with release.jks
           if [[ "$RELEASE_APK" == *"unsigned"* ]]; then
-            echo "Signing release APK with generated key..."
-            keytool -genkeypair -v -keystore release.keystore -alias tinykeyboard \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -storepass android -keypass android \
-              -dname "CN=TinyKeyboard, OU=Keyboard, O=Tiny, L=World, S=World, C=US"
-            
-            # Find latest build-tools for zipalign & apksigner
+            echo "Signing release APK with release.jks..."
             BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -n 1)
             
             $BUILD_TOOLS_DIR/zipalign -v -p 4 "$RELEASE_APK" dist/app-release-aligned.apk
-            $BUILD_TOOLS_DIR/apksigner sign --ks release.keystore \
+            $BUILD_TOOLS_DIR/apksigner sign --ks app/release.jks \
               --ks-pass pass:android --key-pass pass:android \
               --out dist/app-release.apk dist/app-release-aligned.apk
-            rm -f dist/app-release-aligned.apk release.keystore
+            rm -f dist/app-release-aligned.apk
           else
             cp "$RELEASE_APK" dist/app-release.apk
           fi

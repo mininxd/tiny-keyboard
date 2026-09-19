@@ -18,12 +18,16 @@ package rkr.tinykeyboard.inputmethod;
 
 import android.app.AlertDialog;
 import android.app.Dialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.graphics.Typeface;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable;
 import android.inputmethodservice.InputMethodService;
 import android.inputmethodservice.Keyboard;
 import android.inputmethodservice.KeyboardView;
@@ -33,12 +37,15 @@ import android.os.IBinder;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.text.InputType;
+import android.text.TextUtils;
 import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowManager;
@@ -46,12 +53,15 @@ import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.CheckBox;
+import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.TextView;
+import java.util.List;
 
 public class SoftKeyboard extends InputMethodService
         implements KeyboardView.OnKeyboardActionListener {
@@ -63,11 +73,22 @@ public class SoftKeyboard extends InputMethodService
     private static final String PREF_HIGH_CONTRAST = "high_contrast";
     private static final String PREF_HEIGHT_SCALE = "height_scale";
     private static final String PREF_THEME = "keyboard_theme";
+    private static final String PREF_CLIPBOARD_BAR = "clipboard_bar";
 
     private InputMethodManager mInputMethodManager;
     private KeyboardView mInputView;
     private android.graphics.Insets mInsets;
     private Vibrator mVibrator;
+
+    private LinearLayout mRootView;
+    private FrameLayout mContainerView;
+    private View mTopBarLayout;
+    private LinearLayout mTopBarChipsContainer;
+    private View mClipboardPanelView;
+    private LinearLayout mClipboardItemsLayout;
+    private ClipboardManager mClipboardManager;
+    private ClipboardManager.OnPrimaryClipChangedListener mClipListener;
+    private String mLastClipboardText = null;
 
     private int mLastDisplayWidth;
     private int mLastDisplayHeight;
@@ -77,6 +98,7 @@ public class SoftKeyboard extends InputMethodService
     private boolean mHapticEnabled = true;
     private int mVibrateDuration = 20; // 5ms to 100ms
     private boolean mHighContrast = true;
+    private boolean mClipboardBarEnabled = true;
     private int mLastPressedKey = 0;
     
     private LatinKeyboard mSymbolsKeyboard;
@@ -93,6 +115,20 @@ public class SoftKeyboard extends InputMethodService
         mHapticEnabled = prefs.getBoolean(PREF_HAPTIC, true);
         mVibrateDuration = prefs.getInt(PREF_VIBRATE_DURATION, 20);
         mHighContrast = prefs.getBoolean(PREF_HIGH_CONTRAST, true);
+        mClipboardBarEnabled = prefs.getBoolean(PREF_CLIPBOARD_BAR, true);
+
+        try {
+            mClipboardManager = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (mClipboardManager != null) {
+                mClipListener = new ClipboardManager.OnPrimaryClipChangedListener() {
+                    @Override
+                    public void onPrimaryClipChanged() {
+                        updateClipboardFromSystem();
+                    }
+                };
+                mClipboardManager.addPrimaryClipChangedListener(mClipListener);
+            }
+        } catch (Throwable ignored) {}
     }
 
     private float getHeightScale() {
@@ -170,6 +206,7 @@ public class SoftKeyboard extends InputMethodService
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         String theme = prefs.getString(PREF_THEME, "legacy");
         boolean highContrast = prefs.getBoolean(PREF_HIGH_CONTRAST, true);
+        mClipboardBarEnabled = prefs.getBoolean(PREF_CLIPBOARD_BAR, true);
 
         int layoutRes;
         if ("legacy".equals(theme)) {
@@ -183,14 +220,6 @@ public class SoftKeyboard extends InputMethodService
         mInputView = (KeyboardView) LayoutInflater.from(context).inflate(layoutRes, null);
         mInputView.setOnKeyboardActionListener(this);
         mInputView.setPreviewEnabled(false);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            setLayoutParams(mInputView);
-            mInputView.setOnApplyWindowInsetsListener((view, windowInsets) -> {
-                mInsets = windowInsets.getInsets(WindowInsets.Type.systemBars());
-                setLayoutParams(mInputView);
-                return WindowInsets.CONSUMED;
-            });
-        }
         mInputView.setOnTouchListener(new View.OnTouchListener() {
             private float mDownX;
             private float mDownY;
@@ -252,7 +281,39 @@ public class SoftKeyboard extends InputMethodService
             }
         });
         setLatinKeyboard(mCurKeyboard != null ? mCurKeyboard : mQwertyKeyboard);
-        return mInputView;
+
+        mRootView = new LinearLayout(context);
+        mRootView.setOrientation(LinearLayout.VERTICAL);
+        mRootView.setLayoutParams(new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        mTopBarLayout = buildTopBarView(context);
+        mTopBarLayout.setVisibility(mClipboardBarEnabled ? View.VISIBLE : View.GONE);
+        mRootView.addView(mTopBarLayout);
+
+        mContainerView = new FrameLayout(context);
+        mContainerView.setLayoutParams(new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        mContainerView.addView(mInputView);
+
+        mClipboardPanelView = buildClipboardPanelView(context);
+        mClipboardPanelView.setVisibility(View.GONE);
+        mContainerView.addView(mClipboardPanelView);
+
+        mRootView.addView(mContainerView);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            setLayoutParams(mRootView);
+            mRootView.setOnApplyWindowInsetsListener((view, windowInsets) -> {
+                mInsets = windowInsets.getInsets(WindowInsets.Type.systemBars());
+                setLayoutParams(mRootView);
+                return WindowInsets.CONSUMED;
+            });
+        }
+
+        refreshTopBar();
+        return mRootView;
     }
 
     private void cancelTouchOnView(View v, MotionEvent event) {
@@ -312,6 +373,7 @@ public class SoftKeyboard extends InputMethodService
 
     @Override public void onFinishInput() {
         super.onFinishInput();
+        hideClipboardPanel();
         mCurKeyboard = mQwertyKeyboard;
         if (mInputView != null) {
             mInputView.closing();
@@ -320,12 +382,34 @@ public class SoftKeyboard extends InputMethodService
 
     @Override public void onDestroy() {
         super.onDestroy();
+        if (mClipboardManager != null && mClipListener != null) {
+            try {
+                mClipboardManager.removePrimaryClipChangedListener(mClipListener);
+            } catch (Throwable ignored) {}
+        }
     }
     
     @Override public void onStartInputView(EditorInfo attribute, boolean restarting) {
         super.onStartInputView(attribute, restarting);
+        hideClipboardPanel();
         // Apply the selected keyboard to the input view.
         setLatinKeyboard(mCurKeyboard);
+        updateClipboardFromSystem();
+    }
+
+    @Override
+    public void onWindowShown() {
+        super.onWindowShown();
+        updateClipboardFromSystem();
+    }
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_BACK && mClipboardPanelView != null && mClipboardPanelView.getVisibility() == View.VISIBLE) {
+            hideClipboardPanel();
+            return true;
+        }
+        return super.onKeyDown(keyCode, event);
     }
 
     @Override
@@ -600,7 +684,13 @@ public class SoftKeyboard extends InputMethodService
     }
 
     private void showSettingsDialog() {
-        if (mInputView == null || mInputView.getWindowToken() == null) {
+        IBinder token = null;
+        if (mRootView != null && mRootView.getWindowToken() != null) {
+            token = mRootView.getWindowToken();
+        } else if (mInputView != null && mInputView.getWindowToken() != null) {
+            token = mInputView.getWindowToken();
+        }
+        if (token == null) {
             return;
         }
 
@@ -609,6 +699,7 @@ public class SoftKeyboard extends InputMethodService
         int currentVibrateDuration = prefs.getInt(PREF_VIBRATE_DURATION, 20);
         boolean currentHighContrast = prefs.getBoolean(PREF_HIGH_CONTRAST, true);
         boolean currentSwipeCase = prefs.getBoolean(PREF_SWIPE_CASE, false);
+        boolean currentClipboardBar = prefs.getBoolean(PREF_CLIPBOARD_BAR, true);
         int currentHeight = prefs.getInt(PREF_HEIGHT_SCALE, 100);
         final String currentTheme = prefs.getString(PREF_THEME, "legacy");
 
@@ -704,6 +795,15 @@ public class SoftKeyboard extends InputMethodService
         swipeCaseCheck.setChecked(currentSwipeCase);
         layout.addView(swipeCaseCheck);
 
+        final CheckBox clipboardBarCheck = new CheckBox(context);
+        clipboardBarCheck.setText("Clipboard toolbar & quick paste");
+        clipboardBarCheck.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        clipboardBarCheck.setTextColor(onSurfaceColor);
+        clipboardBarCheck.setMinimumHeight(0);
+        clipboardBarCheck.setPadding(clipboardBarCheck.getPaddingLeft(), (int) (3 * density), clipboardBarCheck.getPaddingRight(), (int) (3 * density));
+        clipboardBarCheck.setChecked(currentClipboardBar);
+        layout.addView(clipboardBarCheck);
+
         final TextView themeLabel = new TextView(context);
         themeLabel.setText("Theme");
         themeLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
@@ -789,6 +889,7 @@ public class SoftKeyboard extends InputMethodService
             hapticCheck.setButtonTintList(tint);
             contrastCheck.setButtonTintList(tint);
             swipeCaseCheck.setButtonTintList(tint);
+            clipboardBarCheck.setButtonTintList(tint);
             legacyBtn.setButtonTintList(tint);
             autoBtn.setButtonTintList(tint);
             lightBtn.setButtonTintList(tint);
@@ -805,6 +906,7 @@ public class SoftKeyboard extends InputMethodService
             int vibrateDuration = 5 + vibrateBar.getProgress();
             boolean highContrast = contrastCheck.isChecked();
             boolean swipeCase = swipeCaseCheck.isChecked();
+            boolean clipboardBar = clipboardBarCheck.isChecked();
             int height = 70 + heightBar.getProgress();
             int checkedThemeId = themeGroup.getCheckedRadioButtonId();
             String selectedTheme = "legacy";
@@ -823,6 +925,7 @@ public class SoftKeyboard extends InputMethodService
                 .putInt(PREF_VIBRATE_DURATION, vibrateDuration)
                 .putBoolean(PREF_HIGH_CONTRAST, highContrast)
                 .putBoolean(PREF_SWIPE_CASE, swipeCase)
+                .putBoolean(PREF_CLIPBOARD_BAR, clipboardBar)
                 .putInt(PREF_HEIGHT_SCALE, height)
                 .putString(PREF_THEME, selectedTheme)
                 .apply();
@@ -830,6 +933,7 @@ public class SoftKeyboard extends InputMethodService
             mVibrateDuration = vibrateDuration;
             mHighContrast = highContrast;
             mSwipeCaseEnabled = swipeCase;
+            mClipboardBarEnabled = clipboardBar;
             mLastDisplayWidth = 0;
             mLastDisplayHeight = 0;
             onInitializeInterface();
@@ -847,7 +951,7 @@ public class SoftKeyboard extends InputMethodService
             window.setBackgroundDrawable(dialogBg);
 
             WindowManager.LayoutParams lp = window.getAttributes();
-            lp.token = mInputView.getWindowToken();
+            lp.token = token;
             lp.type = WindowManager.LayoutParams.TYPE_APPLICATION_ATTACHED_DIALOG;
             window.setAttributes(lp);
             window.addFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM);
@@ -863,6 +967,539 @@ public class SoftKeyboard extends InputMethodService
             if (ad.getButton(AlertDialog.BUTTON_NEGATIVE) != null) {
                 ad.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(onSurfaceVariantColor);
             }
+        }
+    }
+
+    private static class ThemeColors {
+        boolean isDark;
+        int surfaceColor;
+        int onSurfaceColor;
+        int onSurfaceVariantColor;
+        int accentColor;
+        int chipBgColor;
+        int chipPressedColor;
+        int chipStrokeColor;
+        int dividerColor;
+    }
+
+    private ThemeColors getThemeColors() {
+        Context context = getThemedContext();
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        String theme = prefs.getString(PREF_THEME, "legacy");
+        boolean highContrast = prefs.getBoolean(PREF_HIGH_CONTRAST, true);
+
+        boolean isNight = (context.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+        boolean dark = "dark".equals(theme) || ("auto".equals(theme) && isNight) || "legacy".equals(theme);
+
+        ThemeColors tc = new ThemeColors();
+        tc.isDark = dark;
+        tc.surfaceColor = dark ? 0xFF211F26 : 0xFFF3F4F9;
+        tc.onSurfaceColor = dark ? 0xFFE6E1E5 : 0xFF1B1B1F;
+        tc.onSurfaceVariantColor = dark ? 0xFFC4C7D0 : 0xFF44474E;
+        tc.accentColor = dark ? 0xFF82B1FF : 0xFF0061A4;
+        tc.chipBgColor = dark ? 0xFF2D3036 : 0xFFFFFFFF;
+        tc.chipPressedColor = dark ? 0xFF40434C : 0xFFD6D9E2;
+        tc.chipStrokeColor = highContrast ? (dark ? 0xFF555864 : 0xFFB6BBC8) : 0;
+        tc.dividerColor = dark ? 0x22FFFFFF : 0x1A000000;
+        return tc;
+    }
+
+    private Drawable createPillDrawable(int normalColor, int pressedColor, int strokeColor, float radius) {
+        StateListDrawable sld = new StateListDrawable();
+
+        GradientDrawable pressed = new GradientDrawable();
+        pressed.setShape(GradientDrawable.RECTANGLE);
+        pressed.setCornerRadius(radius);
+        pressed.setColor(pressedColor);
+        if (strokeColor != 0) {
+            pressed.setStroke(1, strokeColor);
+        }
+
+        GradientDrawable normal = new GradientDrawable();
+        normal.setShape(GradientDrawable.RECTANGLE);
+        normal.setCornerRadius(radius);
+        normal.setColor(normalColor);
+        if (strokeColor != 0) {
+            normal.setStroke(1, strokeColor);
+        }
+
+        sld.addState(new int[]{android.R.attr.state_pressed}, pressed);
+        sld.addState(new int[]{}, normal);
+        return sld;
+    }
+
+    private View buildTopBarView(Context context) {
+        float density = context.getResources().getDisplayMetrics().density;
+        ThemeColors tc = getThemeColors();
+
+        LinearLayout topBar = new LinearLayout(context);
+        topBar.setOrientation(LinearLayout.HORIZONTAL);
+        topBar.setGravity(Gravity.CENTER_VERTICAL);
+        int barHeight = (int) (38 * density);
+        topBar.setLayoutParams(new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, barHeight));
+        topBar.setBackgroundColor(tc.surfaceColor);
+        topBar.setPadding((int) (6 * density), (int) (3 * density), (int) (6 * density), (int) (3 * density));
+
+        // Clipboard toggle button
+        TextView cbBtn = new TextView(context);
+        cbBtn.setText("📋");
+        cbBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        cbBtn.setGravity(Gravity.CENTER);
+        cbBtn.setBackground(createPillDrawable(0, tc.chipPressedColor, 0, 16 * density));
+        int padH = (int) (8 * density);
+        int padV = (int) (4 * density);
+        cbBtn.setPadding(padH, padV, padH, padV);
+        cbBtn.setOnClickListener(v -> toggleClipboardPanel());
+        topBar.addView(cbBtn);
+
+        // Settings button
+        TextView setBtn = new TextView(context);
+        setBtn.setText("⚙️");
+        setBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        setBtn.setGravity(Gravity.CENTER);
+        setBtn.setBackground(createPillDrawable(0, tc.chipPressedColor, 0, 16 * density));
+        setBtn.setPadding(padH, padV, padH, padV);
+        setBtn.setOnClickListener(v -> showSettingsDialog());
+        topBar.addView(setBtn);
+
+        // Vertical Divider
+        View divider = new View(context);
+        LinearLayout.LayoutParams divParams = new LinearLayout.LayoutParams((int) (1 * density), (int) (20 * density));
+        divParams.setMargins((int) (4 * density), 0, (int) (4 * density), 0);
+        divider.setLayoutParams(divParams);
+        divider.setBackgroundColor(tc.dividerColor);
+        topBar.addView(divider);
+
+        // Horizontal scroll container for chips
+        HorizontalScrollView scroll = new HorizontalScrollView(context);
+        scroll.setHorizontalScrollBarEnabled(false);
+        scroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1.0f);
+        scroll.setLayoutParams(scrollParams);
+
+        mTopBarChipsContainer = new LinearLayout(context);
+        mTopBarChipsContainer.setOrientation(LinearLayout.HORIZONTAL);
+        mTopBarChipsContainer.setGravity(Gravity.CENTER_VERTICAL);
+        scroll.addView(mTopBarChipsContainer, new ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        topBar.addView(scroll);
+
+        return topBar;
+    }
+
+    private void refreshTopBar() {
+        if (mTopBarChipsContainer == null) return;
+        Context context = getThemedContext();
+        float density = context.getResources().getDisplayMetrics().density;
+        ThemeColors tc = getThemeColors();
+
+        mTopBarChipsContainer.removeAllViews();
+
+        List<String> clips = ClipboardHistory.getClips(this);
+
+        // 1. Prominent Quick-Paste Pill (for the latest clip, like Gboard)
+        if (!clips.isEmpty()) {
+            final String latest = clips.get(0);
+            String preview = latest.replace('\n', ' ').trim();
+            if (preview.length() > 22) {
+                preview = preview.substring(0, 22) + "…";
+            }
+
+            TextView pill = new TextView(context);
+            pill.setText("📋 " + preview);
+            pill.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f);
+            pill.setTypeface(Typeface.DEFAULT_BOLD);
+            pill.setTextColor(tc.accentColor);
+            pill.setSingleLine(true);
+            pill.setGravity(Gravity.CENTER);
+
+            int pillBg = tc.isDark ? 0x3382B1FF : 0x220061A4;
+            int pillPressed = tc.isDark ? 0x5582B1FF : 0x440061A4;
+            int pillStroke = tc.accentColor;
+            pill.setBackground(createPillDrawable(pillBg, pillPressed, pillStroke, 15 * density));
+
+            LinearLayout.LayoutParams pillLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, (int) (28 * density));
+            pillLp.setMargins(0, 0, (int) (6 * density), 0);
+            pill.setLayoutParams(pillLp);
+            pill.setPadding((int) (10 * density), 0, (int) (10 * density), 0);
+
+            pill.setOnClickListener(v -> {
+                InputConnection ic = getCurrentInputConnection();
+                if (ic != null) {
+                    ic.commitText(latest, 1);
+                    updateShiftKeyState(getCurrentInputEditorInfo());
+                }
+                vibrate(mVibrateDuration);
+            });
+            mTopBarChipsContainer.addView(pill);
+
+            // Additional 2-3 recent clips as secondary pills
+            for (int i = 1; i < Math.min(clips.size(), 4); i++) {
+                final String clip = clips.get(i);
+                String subPrev = clip.replace('\n', ' ').trim();
+                if (subPrev.length() > 14) {
+                    subPrev = subPrev.substring(0, 14) + "…";
+                }
+
+                TextView subPill = new TextView(context);
+                subPill.setText(subPrev);
+                subPill.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
+                subPill.setTextColor(tc.onSurfaceColor);
+                subPill.setSingleLine(true);
+                subPill.setGravity(Gravity.CENTER);
+                subPill.setBackground(createPillDrawable(tc.chipBgColor, tc.chipPressedColor, tc.chipStrokeColor, 14 * density));
+
+                LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, (int) (26 * density));
+                subLp.setMargins(0, 0, (int) (5 * density), 0);
+                subPill.setLayoutParams(subLp);
+                subPill.setPadding((int) (8 * density), 0, (int) (8 * density), 0);
+
+                subPill.setOnClickListener(v -> {
+                    InputConnection ic = getCurrentInputConnection();
+                    if (ic != null) {
+                        ic.commitText(clip, 1);
+                        updateShiftKeyState(getCurrentInputEditorInfo());
+                    }
+                    vibrate(mVibrateDuration);
+                });
+                mTopBarChipsContainer.addView(subPill);
+            }
+        }
+
+        // Quick editing action chips: Select all, Cut, Copy, Paste
+        addTopBarActionChip(context, density, tc, "Select all", () -> {
+            InputConnection ic = getCurrentInputConnection();
+            if (ic != null) {
+                ic.performContextMenuAction(android.R.id.selectAll);
+                vibrate(mVibrateDuration);
+            }
+        });
+
+        addTopBarActionChip(context, density, tc, "Cut", () -> {
+            InputConnection ic = getCurrentInputConnection();
+            if (ic != null) {
+                CharSequence selected = ic.getSelectedText(0);
+                if (selected != null && selected.length() > 0) {
+                    if (mClipboardManager != null) {
+                        try {
+                            mClipboardManager.setPrimaryClip(ClipData.newPlainText("text", selected));
+                            ClipboardHistory.addClip(SoftKeyboard.this, selected.toString());
+                        } catch (Throwable ignored) {}
+                    }
+                    ic.commitText("", 1);
+                } else {
+                    ic.performContextMenuAction(android.R.id.cut);
+                }
+                vibrate(mVibrateDuration);
+                refreshTopBar();
+            }
+        });
+
+        addTopBarActionChip(context, density, tc, "Copy", () -> {
+            InputConnection ic = getCurrentInputConnection();
+            if (ic != null) {
+                CharSequence selected = ic.getSelectedText(0);
+                if (selected != null && selected.length() > 0) {
+                    if (mClipboardManager != null) {
+                        try {
+                            mClipboardManager.setPrimaryClip(ClipData.newPlainText("text", selected));
+                            ClipboardHistory.addClip(SoftKeyboard.this, selected.toString());
+                        } catch (Throwable ignored) {}
+                    }
+                } else {
+                    ic.performContextMenuAction(android.R.id.copy);
+                }
+                vibrate(mVibrateDuration);
+                refreshTopBar();
+            }
+        });
+
+        addTopBarActionChip(context, density, tc, "Paste", () -> {
+            InputConnection ic = getCurrentInputConnection();
+            if (ic != null) {
+                String latest = ClipboardHistory.getLatestClip(SoftKeyboard.this);
+                if (latest != null && latest.length() > 0) {
+                    ic.commitText(latest, 1);
+                    updateShiftKeyState(getCurrentInputEditorInfo());
+                } else if (mClipboardManager != null && mClipboardManager.hasPrimaryClip()) {
+                    try {
+                        ClipData clip = mClipboardManager.getPrimaryClip();
+                        if (clip != null && clip.getItemCount() > 0) {
+                            CharSequence text = clip.getItemAt(0).coerceToText(SoftKeyboard.this);
+                            if (text != null && text.length() > 0) {
+                                ic.commitText(text, 1);
+                                updateShiftKeyState(getCurrentInputEditorInfo());
+                            }
+                        }
+                    } catch (Throwable ignored) {
+                        ic.performContextMenuAction(android.R.id.paste);
+                    }
+                } else {
+                    ic.performContextMenuAction(android.R.id.paste);
+                }
+                vibrate(mVibrateDuration);
+            }
+        });
+    }
+
+    private void addTopBarActionChip(Context context, float density, ThemeColors tc, String label, Runnable action) {
+        TextView chip = new TextView(context);
+        chip.setText(label);
+        chip.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f);
+        chip.setTextColor(tc.onSurfaceVariantColor);
+        chip.setSingleLine(true);
+        chip.setGravity(Gravity.CENTER);
+        chip.setBackground(createPillDrawable(tc.chipBgColor, tc.chipPressedColor, tc.chipStrokeColor, 13 * density));
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, (int) (26 * density));
+        lp.setMargins(0, 0, (int) (5 * density), 0);
+        chip.setLayoutParams(lp);
+        chip.setPadding((int) (8 * density), 0, (int) (8 * density), 0);
+
+        chip.setOnClickListener(v -> action.run());
+        mTopBarChipsContainer.addView(chip);
+    }
+
+    private View buildClipboardPanelView(Context context) {
+        float density = context.getResources().getDisplayMetrics().density;
+        ThemeColors tc = getThemeColors();
+
+        LinearLayout panel = new LinearLayout(context);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setBackgroundColor(tc.surfaceColor);
+
+        int kbHeight = mCurKeyboard != null ? mCurKeyboard.getHeight() : (int) (240 * density);
+        panel.setLayoutParams(new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, kbHeight));
+
+        // Header layout
+        LinearLayout header = new LinearLayout(context);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setLayoutParams(new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, (int) (40 * density)));
+        header.setPadding((int) (4 * density), 0, (int) (8 * density), 0);
+
+        // Back button
+        TextView backBtn = new TextView(context);
+        backBtn.setText("←");
+        backBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
+        backBtn.setTextColor(tc.onSurfaceColor);
+        backBtn.setGravity(Gravity.CENTER);
+        backBtn.setBackground(createPillDrawable(0, tc.chipPressedColor, 0, 16 * density));
+        int padH = (int) (12 * density);
+        int padV = (int) (6 * density);
+        backBtn.setPadding(padH, padV, padH, padV);
+        backBtn.setOnClickListener(v -> hideClipboardPanel());
+        header.addView(backBtn);
+
+        // Title
+        TextView title = new TextView(context);
+        title.setText("Clipboard");
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        title.setTextColor(tc.onSurfaceColor);
+        title.setPadding((int) (6 * density), 0, 0, 0);
+        header.addView(title);
+
+        // Spacer
+        View spacer = new View(context);
+        header.addView(spacer, new LinearLayout.LayoutParams(0, 0, 1.0f));
+
+        // Clear All button
+        TextView clearBtn = new TextView(context);
+        clearBtn.setText("Clear all");
+        clearBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        clearBtn.setTypeface(Typeface.DEFAULT_BOLD);
+        clearBtn.setTextColor(tc.accentColor);
+        clearBtn.setBackground(createPillDrawable(0, tc.chipPressedColor, 0, 14 * density));
+        clearBtn.setPadding(padH, padV, padH, padV);
+        clearBtn.setOnClickListener(v -> {
+            ClipboardHistory.clear(SoftKeyboard.this);
+            updateClipboardPanel();
+            refreshTopBar();
+            vibrate(mVibrateDuration);
+        });
+        header.addView(clearBtn);
+
+        panel.addView(header);
+
+        // Divider below header
+        View headerDivider = new View(context);
+        headerDivider.setLayoutParams(new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, (int) (1 * density)));
+        headerDivider.setBackgroundColor(tc.dividerColor);
+        panel.addView(headerDivider);
+
+        // ScrollView for items
+        ScrollView scrollView = new ScrollView(context);
+        scrollView.setLayoutParams(new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f));
+        scrollView.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+
+        mClipboardItemsLayout = new LinearLayout(context);
+        mClipboardItemsLayout.setOrientation(LinearLayout.VERTICAL);
+        mClipboardItemsLayout.setPadding((int) (10 * density), (int) (8 * density), (int) (10 * density), (int) (12 * density));
+        scrollView.addView(mClipboardItemsLayout, new ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        panel.addView(scrollView);
+        return panel;
+    }
+
+    private void updateClipboardPanel() {
+        if (mClipboardItemsLayout == null) return;
+        Context context = getThemedContext();
+        float density = context.getResources().getDisplayMetrics().density;
+        ThemeColors tc = getThemeColors();
+
+        mClipboardItemsLayout.removeAllViews();
+        List<String> clips = ClipboardHistory.getClips(this);
+
+        if (clips.isEmpty()) {
+            LinearLayout emptyLayout = new LinearLayout(context);
+            emptyLayout.setOrientation(LinearLayout.VERTICAL);
+            emptyLayout.setGravity(Gravity.CENTER);
+            emptyLayout.setPadding(0, (int) (40 * density), 0, (int) (20 * density));
+
+            TextView emptyIcon = new TextView(context);
+            emptyIcon.setText("📋");
+            emptyIcon.setTextSize(TypedValue.COMPLEX_UNIT_SP, 36);
+            emptyIcon.setGravity(Gravity.CENTER);
+            emptyLayout.addView(emptyIcon);
+
+            TextView emptyTitle = new TextView(context);
+            emptyTitle.setText("Clipboard is empty");
+            emptyTitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+            emptyTitle.setTypeface(Typeface.DEFAULT_BOLD);
+            emptyTitle.setTextColor(tc.onSurfaceColor);
+            emptyTitle.setGravity(Gravity.CENTER);
+            emptyTitle.setPadding(0, (int) (8 * density), 0, (int) (2 * density));
+            emptyLayout.addView(emptyTitle);
+
+            TextView emptySub = new TextView(context);
+            emptySub.setText("Copied text will appear here automatically.");
+            emptySub.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+            emptySub.setTextColor(tc.onSurfaceVariantColor);
+            emptySub.setGravity(Gravity.CENTER);
+            emptyLayout.addView(emptySub);
+
+            mClipboardItemsLayout.addView(emptyLayout);
+            return;
+        }
+
+        for (final String clipText : clips) {
+            LinearLayout card = new LinearLayout(context);
+            card.setOrientation(LinearLayout.HORIZONTAL);
+            card.setGravity(Gravity.CENTER_VERTICAL);
+            card.setBackground(createPillDrawable(tc.chipBgColor, tc.chipPressedColor, tc.chipStrokeColor, 12 * density));
+            card.setPadding((int) (12 * density), (int) (10 * density), (int) (8 * density), (int) (10 * density));
+
+            LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            cardLp.setMargins(0, 0, 0, (int) (6 * density));
+            card.setLayoutParams(cardLp);
+
+            // Text content
+            TextView text = new TextView(context);
+            text.setText(clipText);
+            text.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f);
+            text.setTextColor(tc.onSurfaceColor);
+            text.setMaxLines(3);
+            text.setEllipsize(TextUtils.TruncateAt.END);
+            card.addView(text, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
+
+            // Delete button for this item
+            TextView delBtn = new TextView(context);
+            delBtn.setText("✕");
+            delBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+            delBtn.setTextColor(tc.onSurfaceVariantColor);
+            delBtn.setGravity(Gravity.CENTER);
+            delBtn.setBackground(createPillDrawable(0, tc.chipPressedColor, 0, 12 * density));
+            delBtn.setPadding((int) (10 * density), (int) (6 * density), (int) (10 * density), (int) (6 * density));
+            delBtn.setOnClickListener(v -> {
+                ClipboardHistory.removeClip(SoftKeyboard.this, clipText);
+                updateClipboardPanel();
+                refreshTopBar();
+                vibrate(mVibrateDuration);
+            });
+            card.addView(delBtn);
+
+            // Clicking the card pastes the text and switches back to the keyboard
+            card.setOnClickListener(v -> {
+                InputConnection ic = getCurrentInputConnection();
+                if (ic != null) {
+                    ic.commitText(clipText, 1);
+                    updateShiftKeyState(getCurrentInputEditorInfo());
+                }
+                vibrate(mVibrateDuration);
+                hideClipboardPanel();
+            });
+
+            mClipboardItemsLayout.addView(card);
+        }
+    }
+
+    private void toggleClipboardPanel() {
+        if (mClipboardPanelView == null || mInputView == null) return;
+        if (mClipboardPanelView.getVisibility() == View.VISIBLE) {
+            hideClipboardPanel();
+        } else {
+            showClipboardPanel();
+        }
+    }
+
+    private void showClipboardPanel() {
+        if (mClipboardPanelView == null || mInputView == null) return;
+        int h = 0;
+        if (mInputView != null && mInputView.getHeight() > 0) {
+            h = mInputView.getHeight();
+        } else if (mCurKeyboard != null && mCurKeyboard.getHeight() > 0) {
+            h = mCurKeyboard.getHeight();
+        }
+        if (h > 0) {
+            ViewGroup.LayoutParams lp = mClipboardPanelView.getLayoutParams();
+            if (lp != null) {
+                lp.height = h;
+                mClipboardPanelView.setLayoutParams(lp);
+            }
+        }
+        updateClipboardPanel();
+        mInputView.setVisibility(View.GONE);
+        mClipboardPanelView.setVisibility(View.VISIBLE);
+        vibrate(mVibrateDuration);
+    }
+
+    private void hideClipboardPanel() {
+        if (mClipboardPanelView == null || mInputView == null) return;
+        mClipboardPanelView.setVisibility(View.GONE);
+        mInputView.setVisibility(View.VISIBLE);
+    }
+
+    private void updateClipboardFromSystem() {
+        if (mClipboardManager == null) return;
+        try {
+            if (mClipboardManager.hasPrimaryClip()) {
+                ClipData clip = mClipboardManager.getPrimaryClip();
+                if (clip != null && clip.getItemCount() > 0) {
+                    CharSequence text = clip.getItemAt(0).coerceToText(this);
+                    if (text != null && text.length() > 0) {
+                        String str = text.toString();
+                        if (!str.equals(mLastClipboardText)) {
+                            mLastClipboardText = str;
+                            ClipboardHistory.addClip(this, str);
+                        }
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
+        refreshTopBar();
+        if (mClipboardPanelView != null && mClipboardPanelView.getVisibility() == View.VISIBLE) {
+            updateClipboardPanel();
         }
     }
 }
