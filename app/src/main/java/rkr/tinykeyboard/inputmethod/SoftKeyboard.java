@@ -37,6 +37,7 @@ import android.os.IBinder;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.text.InputType;
+import android.os.Handler;
 import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -117,6 +118,8 @@ public class SoftKeyboard extends InputMethodService
     private LatinKeyboard mSymbolsShiftedKeyboard;
     private LatinKeyboard mQwertyKeyboard;
     private LatinKeyboard mCurKeyboard;
+    private Field mPreviewPopupField;
+    private Field mHandlerField;
 
 
     @Override public void onCreate() {
@@ -250,12 +253,14 @@ public class SoftKeyboard extends InputMethodService
         mInputView.setOnKeyboardActionListener(this);
         mInputView.setPreviewEnabled(mKeyPreviewEnabled);
         try {
-            Field f = KeyboardView.class.getDeclaredField("mPreviewPopup");
-            f.setAccessible(true);
-            PopupWindow pw = (PopupWindow) f.get(mInputView);
+            mPreviewPopupField = KeyboardView.class.getDeclaredField("mPreviewPopup");
+            mPreviewPopupField.setAccessible(true);
+            PopupWindow pw = (PopupWindow) mPreviewPopupField.get(mInputView);
             if (pw != null) {
                 pw.setAnimationStyle(0);
             }
+            mHandlerField = KeyboardView.class.getDeclaredField("mHandler");
+            mHandlerField.setAccessible(true);
         } catch (Throwable ignored) {}
         mInputView.setOnTouchListener(new View.OnTouchListener() {
             private float mDownX;
@@ -267,6 +272,7 @@ public class SoftKeyboard extends InputMethodService
             private float mLastSlideX;
             private float mAccumulatedSlideDelta;
             private boolean mStartedOnSpace;
+            private boolean mIsActionTouch;
 
             @Override
             public boolean onTouch(View v, MotionEvent event) {
@@ -281,6 +287,13 @@ public class SoftKeyboard extends InputMethodService
                         mIsSpaceSliding = false;
                         mAccumulatedSlideDelta = 0f;
                         mStartedOnSpace = false;
+                        mIsActionTouch = isActionKeyAt(mDownX, mDownY);
+                        if (mIsActionTouch) {
+                            mInputView.setPreviewEnabled(false);
+                            dismissPreviewPopup();
+                        } else {
+                            mInputView.setPreviewEnabled(mKeyPreviewEnabled);
+                        }
                         if (mCurKeyboard != null) {
                             Keyboard.Key spaceKey = mCurKeyboard.getSpaceKey();
                             if (spaceKey != null) {
@@ -297,8 +310,18 @@ public class SoftKeyboard extends InputMethodService
                         mDownY = event.getY(downIndex);
                         mDownRawX = event.getRawX();
                         mDownRawY = event.getRawY();
+                        mIsActionTouch = isActionKeyAt(mDownX, mDownY);
+                        if (mIsActionTouch) {
+                            mInputView.setPreviewEnabled(false);
+                            dismissPreviewPopup();
+                        } else {
+                            mInputView.setPreviewEnabled(mKeyPreviewEnabled);
+                        }
                         break;
                     case MotionEvent.ACTION_MOVE:
+                        if (mIsActionTouch) {
+                            mInputView.setPreviewEnabled(false);
+                        }
                         if (mSwipeHandled) {
                             return true;
                         }
@@ -368,6 +391,11 @@ public class SoftKeyboard extends InputMethodService
                         }
                         break;
                     case MotionEvent.ACTION_UP:
+                        if (mIsActionTouch) {
+                            mInputView.setPreviewEnabled(false);
+                            dismissPreviewPopup();
+                        }
+                        mIsActionTouch = false;
                         if (mIsSpaceSliding) {
                             mIsSpaceSliding = false;
                             mStartedOnSpace = false;
@@ -384,6 +412,11 @@ public class SoftKeyboard extends InputMethodService
                         }
                         break;
                     case MotionEvent.ACTION_CANCEL:
+                        if (mIsActionTouch) {
+                            mInputView.setPreviewEnabled(false);
+                            dismissPreviewPopup();
+                        }
+                        mIsActionTouch = false;
                         if (mIsSpaceSliding) {
                             mIsSpaceSliding = false;
                             mStartedOnSpace = false;
@@ -462,7 +495,13 @@ public class SoftKeyboard extends InputMethodService
             final boolean shouldSupportLanguageSwitchKey = mInputMethodManager.shouldOfferSwitchingToNextInputMethod(getToken());
             nextKeyboard.setLanguageSwitchKeyVisibility(shouldSupportLanguageSwitchKey);
         }
-        mInputView.setKeyboard(nextKeyboard);
+        if (mQwertyKeyboard != null && nextKeyboard != mQwertyKeyboard) {
+            nextKeyboard.forceTotalHeight(mQwertyKeyboard.getHeight());
+        }
+        mCurKeyboard = nextKeyboard;
+        if (mInputView != null) {
+            mInputView.setKeyboard(nextKeyboard);
+        }
     }
 
     @Override public void onStartInput(EditorInfo attribute, boolean restarting) {
@@ -610,6 +649,12 @@ public class SoftKeyboard extends InputMethodService
     // Implementation of KeyboardViewListener
 
     public void onKey(int primaryCode, int[] keyCodes) {
+        if (isActionKey(primaryCode)) {
+            if (mInputView != null) {
+                mInputView.setPreviewEnabled(false);
+            }
+            dismissPreviewPopup();
+        }
         if (primaryCode == Keyboard.KEYCODE_DONE) {
             keyDownUp(KeyEvent.KEYCODE_ENTER);
         } else if (primaryCode == Keyboard.KEYCODE_DELETE) {
@@ -817,11 +862,73 @@ public class SoftKeyboard extends InputMethodService
         return code < 0 || code == 32;
     }
 
+    private boolean isActionKeyAt(float x, float y) {
+        Keyboard keyboard = mCurKeyboard;
+        if (keyboard == null && mInputView != null) {
+            keyboard = mInputView.getKeyboard();
+        }
+        if (keyboard == null) return false;
+        List<Keyboard.Key> keys = keyboard.getKeys();
+        if (keys == null || keys.isEmpty()) return false;
+        int ix = (int) x;
+        int iy = (int) y;
+        for (Keyboard.Key key : keys) {
+            if (key.isInside(ix, iy)) {
+                return key.codes != null && key.codes.length > 0 && isActionKey(key.codes[0]);
+            }
+        }
+        for (Keyboard.Key key : keys) {
+            if (ix >= key.x && ix <= (key.x + key.width)
+                    && iy >= key.y && iy <= (key.y + key.height)) {
+                return key.codes != null && key.codes.length > 0 && isActionKey(key.codes[0]);
+            }
+        }
+        int minDist = Integer.MAX_VALUE;
+        Keyboard.Key closestKey = null;
+        for (Keyboard.Key key : keys) {
+            int dist = key.squaredDistanceFrom(ix, iy);
+            if (dist < minDist) {
+                minDist = dist;
+                closestKey = key;
+            }
+        }
+        if (closestKey != null && closestKey.codes != null && closestKey.codes.length > 0) {
+            return isActionKey(closestKey.codes[0]);
+        }
+        return false;
+    }
+
+    private void dismissPreviewPopup() {
+        if (mInputView == null) return;
+        try {
+            if (mPreviewPopupField == null) {
+                mPreviewPopupField = KeyboardView.class.getDeclaredField("mPreviewPopup");
+                mPreviewPopupField.setAccessible(true);
+            }
+            PopupWindow pw = (PopupWindow) mPreviewPopupField.get(mInputView);
+            if (pw != null) {
+                pw.setAnimationStyle(0);
+                if (pw.isShowing()) {
+                    pw.dismiss();
+                }
+            }
+            if (mHandlerField == null) {
+                mHandlerField = KeyboardView.class.getDeclaredField("mHandler");
+                mHandlerField.setAccessible(true);
+            }
+            Handler handler = (Handler) mHandlerField.get(mInputView);
+            if (handler != null) {
+                handler.removeMessages(1); // MSG_SHOW_PREVIEW
+            }
+        } catch (Throwable ignored) {}
+    }
+
     public void onPress(int primaryCode) {
         mLastPressedKey = primaryCode;
         if (mInputView != null) {
             if (isActionKey(primaryCode)) {
                 mInputView.setPreviewEnabled(false);
+                dismissPreviewPopup();
             } else {
                 mInputView.setPreviewEnabled(mKeyPreviewEnabled);
             }
@@ -833,8 +940,11 @@ public class SoftKeyboard extends InputMethodService
         if (mLastPressedKey == primaryCode) {
             mLastPressedKey = 0;
         }
-        if (mInputView != null && isActionKey(primaryCode)) {
-            mInputView.setPreviewEnabled(mKeyPreviewEnabled);
+        if (isActionKey(primaryCode)) {
+            if (mInputView != null) {
+                mInputView.setPreviewEnabled(false);
+            }
+            dismissPreviewPopup();
         }
     }
 
