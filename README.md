@@ -4,7 +4,7 @@
 
 ## About
 
-- Smallest possible APK size under 40kB (as of version 0.9)
+- Smallest possible APK size under 40kB (as of version 1.0)
 - Permissions: 0
 - Supported layouts: en_US
 - No Launcher icon and Settings

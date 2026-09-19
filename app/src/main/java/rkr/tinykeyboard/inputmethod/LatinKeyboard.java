@@ -27,6 +27,7 @@ public class LatinKeyboard extends Keyboard {
     public static final int KEYCODE_LANGUAGE_SWITCH = -101;
 
     private Key mEnterKey;
+    private Key mShiftKey;
     private Key mSpaceKey;
     private Key mLanguageSwitchKey;
     private Key mSavedSpaceKey;
@@ -119,6 +120,8 @@ public class LatinKeyboard extends Keyboard {
         }
         if (code == Keyboard.KEYCODE_DONE) {
             mEnterKey = key;
+        } else if (code == Keyboard.KEYCODE_SHIFT) {
+            mShiftKey = key;
         } else if (code == 32) {
             mSpaceKey = key;
             mSavedSpaceKey = new Key(res, parent, x, y, parser);
@@ -129,6 +132,13 @@ public class LatinKeyboard extends Keyboard {
             mSavedLanguageSwitchKey.modifier = true;
         }
         return key;
+    }
+
+    public void setCapsLock(boolean isCapsLock) {
+        if (mShiftKey != null) {
+            mShiftKey.label = isCapsLock ? "⇪" : "⇧";
+            mShiftKey.on = isCapsLock;
+        }
     }
 
     public Key getSpaceKey() {

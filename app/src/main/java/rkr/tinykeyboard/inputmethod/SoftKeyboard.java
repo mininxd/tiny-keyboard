@@ -121,6 +121,14 @@ public class SoftKeyboard extends InputMethodService
     private LatinKeyboard mCurKeyboard;
     private Field mPreviewPopupField;
     private Field mHandlerField;
+    private Field mPreviewTextField;
+    private Handler mPopupHandler = new Handler();
+    private Runnable mDismissPreviewRunnable = new Runnable() {
+        @Override
+        public void run() {
+            dismissPreviewPopup();
+        }
+    };
 
 
     @Override public void onCreate() {
@@ -395,6 +403,9 @@ public class SoftKeyboard extends InputMethodService
                         if (mIsActionTouch) {
                             mInputView.setPreviewEnabled(false);
                             dismissPreviewPopup();
+                        } else {
+                            mPopupHandler.removeCallbacks(mDismissPreviewRunnable);
+                            mPopupHandler.postDelayed(mDismissPreviewRunnable, 60);
                         }
                         mIsActionTouch = false;
                         if (mIsSpaceSliding) {
@@ -413,10 +424,9 @@ public class SoftKeyboard extends InputMethodService
                         }
                         break;
                     case MotionEvent.ACTION_CANCEL:
-                        if (mIsActionTouch) {
-                            mInputView.setPreviewEnabled(false);
-                            dismissPreviewPopup();
-                        }
+                        mInputView.setPreviewEnabled(false);
+                        dismissPreviewPopup();
+                        mPopupHandler.removeCallbacks(mDismissPreviewRunnable);
                         mIsActionTouch = false;
                         if (mIsSpaceSliding) {
                             mIsSpaceSliding = false;
@@ -503,11 +513,22 @@ public class SoftKeyboard extends InputMethodService
         if (mInputView != null) {
             mInputView.setKeyboard(nextKeyboard);
         }
+        updateCapsLockVisual();
+    }
+
+    private void updateCapsLockVisual() {
+        if (mQwertyKeyboard != null) {
+            mQwertyKeyboard.setCapsLock(mCapsLock);
+        }
+        if (mInputView != null) {
+            mInputView.invalidateAllKeys();
+        }
     }
 
     @Override public void onStartInput(EditorInfo attribute, boolean restarting) {
         super.onStartInput(attribute, restarting);
         mCapsLock = false;
+        updateCapsLockVisual();
         
         // We are now going to initialize our state based on the type of
         // text being edited.
@@ -591,10 +612,12 @@ public class SoftKeyboard extends InputMethodService
         if (attr != null && mInputView != null && mQwertyKeyboard == mInputView.getKeyboard()) {
             if (mCapsLock) {
                 mInputView.setShifted(true);
+                updateCapsLockVisual();
                 return;
             }
             if (!mAutoCap) {
                 mInputView.setShifted(false);
+                updateCapsLockVisual();
                 return;
             }
             int caps = 0;
@@ -629,6 +652,7 @@ public class SoftKeyboard extends InputMethodService
                 }
             }
             mInputView.setShifted(caps != 0);
+            updateCapsLockVisual();
         }
     }
 
@@ -674,6 +698,12 @@ public class SoftKeyboard extends InputMethodService
             }
         } else {
             handleCharacter(primaryCode);
+            if (primaryCode == 32) {
+                Keyboard cur = mInputView != null ? mInputView.getKeyboard() : mCurKeyboard;
+                if (cur == mSymbolsKeyboard || cur == mSymbolsShiftedKeyboard) {
+                    setLatinKeyboard(mQwertyKeyboard);
+                }
+            }
         }
     }
 
@@ -714,6 +744,7 @@ public class SoftKeyboard extends InputMethodService
             // Alphabet keyboard
             checkToggleCapsLock();
             mInputView.setShifted(mCapsLock || !mInputView.isShifted());
+            updateCapsLockVisual();
         } else if (currentKeyboard == mSymbolsKeyboard) {
             mSymbolsKeyboard.setShifted(true);
             setLatinKeyboard(mSymbolsShiftedKeyboard);
@@ -902,6 +933,15 @@ public class SoftKeyboard extends InputMethodService
     private void dismissPreviewPopup() {
         if (mInputView == null) return;
         try {
+            if (mHandlerField == null) {
+                mHandlerField = KeyboardView.class.getDeclaredField("mHandler");
+                mHandlerField.setAccessible(true);
+            }
+            Handler handler = (Handler) mHandlerField.get(mInputView);
+            if (handler != null) {
+                handler.removeMessages(1); // MSG_SHOW_PREVIEW
+                handler.removeMessages(2); // MSG_REMOVE_PREVIEW
+            }
             if (mPreviewPopupField == null) {
                 mPreviewPopupField = KeyboardView.class.getDeclaredField("mPreviewPopup");
                 mPreviewPopupField.setAccessible(true);
@@ -913,13 +953,13 @@ public class SoftKeyboard extends InputMethodService
                     pw.dismiss();
                 }
             }
-            if (mHandlerField == null) {
-                mHandlerField = KeyboardView.class.getDeclaredField("mHandler");
-                mHandlerField.setAccessible(true);
+            if (mPreviewTextField == null) {
+                mPreviewTextField = KeyboardView.class.getDeclaredField("mPreviewText");
+                mPreviewTextField.setAccessible(true);
             }
-            Handler handler = (Handler) mHandlerField.get(mInputView);
-            if (handler != null) {
-                handler.removeMessages(1); // MSG_SHOW_PREVIEW
+            View pt = (View) mPreviewTextField.get(mInputView);
+            if (pt != null) {
+                pt.setVisibility(View.INVISIBLE);
             }
         } catch (Throwable ignored) {}
     }
@@ -946,6 +986,9 @@ public class SoftKeyboard extends InputMethodService
                 mInputView.setPreviewEnabled(false);
             }
             dismissPreviewPopup();
+        } else {
+            mPopupHandler.removeCallbacks(mDismissPreviewRunnable);
+            mPopupHandler.postDelayed(mDismissPreviewRunnable, 60);
         }
     }
 
@@ -1155,7 +1198,7 @@ public class SoftKeyboard extends InputMethodService
 
         int padH = (int) (18 * density);
 
-        // Header: Settings + v0.9 badge
+        // Header: Settings + v1.0 badge
         LinearLayout header = new LinearLayout(context);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
@@ -1169,7 +1212,7 @@ public class SoftKeyboard extends InputMethodService
         header.addView(titleView, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f));
 
         TextView versionBadge = new TextView(context);
-        versionBadge.setText("v0.9");
+        versionBadge.setText("v1.0");
         versionBadge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
         versionBadge.setTypeface(Typeface.DEFAULT_BOLD);
         versionBadge.setTextColor(tc.accentColor);
@@ -1184,7 +1227,22 @@ public class SoftKeyboard extends InputMethodService
 
         builder.setCustomTitle(header);
 
-        ScrollView scrollView = new ScrollView(context);
+        int screenHeight = context.getResources().getDisplayMetrics().heightPixels;
+        final int maxDialogHeight = (int) (screenHeight * 0.70f);
+
+        ScrollView scrollView = new ScrollView(context) {
+            @Override
+            protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+                int heightMode = MeasureSpec.getMode(heightMeasureSpec);
+                int heightSize = MeasureSpec.getSize(heightMeasureSpec);
+                if (maxDialogHeight > 0) {
+                    if (heightMode == MeasureSpec.UNSPECIFIED || heightSize > maxDialogHeight) {
+                        heightMeasureSpec = MeasureSpec.makeMeasureSpec(maxDialogHeight, MeasureSpec.AT_MOST);
+                    }
+                }
+                super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+            }
+        };
         scrollView.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
         LinearLayout layout = new LinearLayout(context);
         layout.setOrientation(LinearLayout.VERTICAL);
@@ -1360,6 +1418,9 @@ public class SoftKeyboard extends InputMethodService
             WindowManager.LayoutParams lp = window.getAttributes();
             lp.token = token;
             lp.type = WindowManager.LayoutParams.TYPE_APPLICATION_ATTACHED_DIALOG;
+            if (lp.height > maxDialogHeight || lp.height == WindowManager.LayoutParams.MATCH_PARENT) {
+                lp.height = maxDialogHeight;
+            }
             window.setAttributes(lp);
             window.addFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM);
         }
