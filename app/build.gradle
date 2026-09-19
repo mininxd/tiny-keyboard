@@ -30,7 +30,9 @@ android {
             excludes += [
                 'META-INF/INDEX.LIST',
                 'META-INF/*.version',
-                'META-INF/version-control-info.textproto'
+                'META-INF/version-control-info.textproto',
+                'META-INF/com/**',
+                '**/*.proto'
             ]
         }
     }

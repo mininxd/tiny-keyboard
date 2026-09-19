@@ -16,3 +16,4 @@
 # debugging stack traces.
 -repackageclasses ''
 -allowaccessmodification
+-optimizationpasses 5
