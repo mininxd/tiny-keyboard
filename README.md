@@ -4,7 +4,7 @@
 
 ## About
 
-- Smallest possible APK size of 26kB (as of version 0.7)
+- Smallest possible APK size under 40kB (as of version 0.8)
 - Permissions: 0
 - Supported layouts: en_US
 - No Launcher icon and Settings
@@ -12,7 +12,7 @@
 
 ## Features
 
-- **Clipboard Toolbar**: Clean top toolbar with a clipboard button (`📋`) to open the full clipboard history drawer for 1-tap pasting and clear-all (toggleable in Settings).
+- **Clipboard Toolbar**: Clean top toolbar with a clipboard button (`📋`) and quick-paste badges for recent copied text to paste in 1 tap, plus a full clipboard history drawer with clear-all (toggleable in Settings).
 - **Spacebar Cursor Slide**: Scroll / slide left and right on the spacebar to move the typing cursor left and right through text with subtle haptic ticks. Includes an adjustable sliding sensitivity slider in Settings.
 - **Lowercase as Default**: Starts and types in lowercase by default, avoiding unwanted auto-capitalization (with an optional auto-capitalization toggle in Settings).
 - **Material 3 UI**: Clean, rounded key cards with native state feedback and zero legacy text shadows.

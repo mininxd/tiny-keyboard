@@ -86,6 +86,7 @@ public class SoftKeyboard extends InputMethodService
     private LinearLayout mRootView;
     private FrameLayout mContainerView;
     private View mTopBarLayout;
+    private LinearLayout mTopBarChipsContainer;
     private View mClipboardPanelView;
     private LinearLayout mClipboardItemsLayout;
     private ClipboardManager mClipboardManager;
@@ -1183,11 +1184,11 @@ public class SoftKeyboard extends InputMethodService
         LinearLayout topBar = new LinearLayout(context);
         topBar.setOrientation(LinearLayout.HORIZONTAL);
         topBar.setGravity(Gravity.CENTER_VERTICAL);
-        int barHeight = (int) (34 * density);
+        int barHeight = (int) (36 * density);
         topBar.setLayoutParams(new LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, barHeight));
         topBar.setBackgroundColor(tc.surfaceColor);
-        topBar.setPadding((int) (8 * density), (int) (2 * density), (int) (8 * density), (int) (2 * density));
+        topBar.setPadding((int) (6 * density), (int) (2 * density), (int) (6 * density), (int) (2 * density));
 
         // Clipboard toggle button
         TextView cbBtn = new TextView(context);
@@ -1195,17 +1196,109 @@ public class SoftKeyboard extends InputMethodService
         cbBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
         cbBtn.setGravity(Gravity.CENTER);
         cbBtn.setBackground(createPillDrawable(0, tc.chipPressedColor, 0, 14 * density));
-        int padH = (int) (10 * density);
+        int padH = (int) (8 * density);
         int padV = (int) (4 * density);
         cbBtn.setPadding(padH, padV, padH, padV);
         cbBtn.setOnClickListener(v -> toggleClipboardPanel());
         topBar.addView(cbBtn);
 
+        // Horizontal scroll container for recent copied text chips
+        HorizontalScrollView scroll = new HorizontalScrollView(context);
+        scroll.setHorizontalScrollBarEnabled(false);
+        scroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1.0f);
+        scrollParams.setMargins((int) (4 * density), 0, 0, 0);
+        scroll.setLayoutParams(scrollParams);
+
+        mTopBarChipsContainer = new LinearLayout(context);
+        mTopBarChipsContainer.setOrientation(LinearLayout.HORIZONTAL);
+        mTopBarChipsContainer.setGravity(Gravity.CENTER_VERTICAL);
+        scroll.addView(mTopBarChipsContainer, new ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        topBar.addView(scroll);
+
         return topBar;
     }
 
     private void refreshTopBar() {
-        // Top bar shows clip button only
+        if (mTopBarChipsContainer == null) return;
+        Context context = getThemedContext();
+        float density = context.getResources().getDisplayMetrics().density;
+        ThemeColors tc = getThemeColors();
+
+        mTopBarChipsContainer.removeAllViews();
+
+        List<String> clips = ClipboardHistory.getClips(this);
+        if (clips.isEmpty()) return;
+
+        // 1. Prominent Quick-Paste Pill (for the latest clip)
+        final String latest = clips.get(0);
+        String preview = latest.replace('\n', ' ').trim();
+        if (preview.length() > 22) {
+            preview = preview.substring(0, 22) + "…";
+        }
+
+        TextView pill = new TextView(context);
+        pill.setText("📋 " + preview);
+        pill.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f);
+        pill.setTypeface(Typeface.DEFAULT_BOLD);
+        pill.setTextColor(tc.accentColor);
+        pill.setSingleLine(true);
+        pill.setGravity(Gravity.CENTER);
+
+        int pillBg = tc.isDark ? 0x3382B1FF : 0x220061A4;
+        int pillPressed = tc.isDark ? 0x5582B1FF : 0x440061A4;
+        int pillStroke = tc.accentColor;
+        pill.setBackground(createPillDrawable(pillBg, pillPressed, pillStroke, 14 * density));
+
+        LinearLayout.LayoutParams pillLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, (int) (26 * density));
+        pillLp.setMargins(0, 0, (int) (6 * density), 0);
+        pill.setLayoutParams(pillLp);
+        pill.setPadding((int) (10 * density), 0, (int) (10 * density), 0);
+
+        pill.setOnClickListener(v -> {
+            InputConnection ic = getCurrentInputConnection();
+            if (ic != null) {
+                ic.commitText(latest, 1);
+                updateShiftKeyState(getCurrentInputEditorInfo());
+            }
+            vibrate(mVibrateDuration);
+        });
+        mTopBarChipsContainer.addView(pill);
+
+        // Additional recent clips as secondary pills
+        for (int i = 1; i < Math.min(clips.size(), 5); i++) {
+            final String clip = clips.get(i);
+            String subPrev = clip.replace('\n', ' ').trim();
+            if (subPrev.length() > 16) {
+                subPrev = subPrev.substring(0, 16) + "…";
+            }
+
+            TextView subPill = new TextView(context);
+            subPill.setText(subPrev);
+            subPill.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
+            subPill.setTextColor(tc.onSurfaceColor);
+            subPill.setSingleLine(true);
+            subPill.setGravity(Gravity.CENTER);
+            subPill.setBackground(createPillDrawable(tc.chipBgColor, tc.chipPressedColor, tc.chipStrokeColor, 13 * density));
+
+            LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, (int) (24 * density));
+            subLp.setMargins(0, 0, (int) (5 * density), 0);
+            subPill.setLayoutParams(subLp);
+            subPill.setPadding((int) (8 * density), 0, (int) (8 * density), 0);
+
+            subPill.setOnClickListener(v -> {
+                InputConnection ic = getCurrentInputConnection();
+                if (ic != null) {
+                    ic.commitText(clip, 1);
+                    updateShiftKeyState(getCurrentInputEditorInfo());
+                }
+                vibrate(mVibrateDuration);
+            });
+            mTopBarChipsContainer.addView(subPill);
+        }
     }
 
     private View buildClipboardPanelView(Context context) {

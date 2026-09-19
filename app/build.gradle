@@ -6,8 +6,8 @@ android {
         compileSdk 37
         minSdkVersion 15
         targetSdkVersion 37
-        versionCode 12
-        versionName "0.12"
+        versionCode 13
+        versionName "0.8"
     }
     signingConfigs {
         release {
@@ -23,6 +23,15 @@ android {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    packaging {
+        resources {
+            excludes += [
+                'META-INF/INDEX.LIST',
+                'META-INF/*.version',
+                'META-INF/version-control-info.textproto'
+            ]
         }
     }
     namespace 'rkr.tinykeyboard.inputmethod'

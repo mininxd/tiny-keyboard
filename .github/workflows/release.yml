@@ -38,7 +38,16 @@ jobs:
         run: |
           if command -v ffmpeg >/dev/null 2>&1; then
             find app/src/main/res -name "*.png" | while read -r img; do
-              ffmpeg -nostdin -y -v error -i "$img" -pred mixed -compression_level 9 "${img}.tmp.png" && mv "${img}.tmp.png" "$img"
+              ffmpeg -nostdin -y -v error -i "$img" -pred mixed -compression_level 9 "${img}.tmp.png" 2>/dev/null || true
+              if [ -f "${img}.tmp.png" ]; then
+                orig=$(wc -c < "$img")
+                comp=$(wc -c < "${img}.tmp.png")
+                if [ "$comp" -lt "$orig" ]; then
+                  mv "${img}.tmp.png" "$img"
+                else
+                  rm -f "${img}.tmp.png"
+                fi
+              fi
             done
           fi
 
