@@ -79,17 +79,67 @@ public class LatinKeyboard extends Keyboard {
         return super.getHeight();
     }
 
+    public void forceTotalHeight(int targetHeight) {
+        if (targetHeight <= 0) return;
+        int currentHeight = getHeight();
+        if (currentHeight <= 0 || currentHeight == targetHeight) {
+            mTotalHeight = targetHeight;
+            return;
+        }
+
+        float ratio = (float) targetHeight / (float) currentHeight;
+        int maxBottom = 0;
+        for (Key key : getKeys()) {
+            key.y = Math.round(key.y * ratio);
+            key.height = Math.round(key.height * ratio);
+            if (key.y + key.height > maxBottom) {
+                maxBottom = key.y + key.height;
+            }
+        }
+        if (mSavedSpaceKey != null) {
+            mSavedSpaceKey.y = Math.round(mSavedSpaceKey.y * ratio);
+            mSavedSpaceKey.height = Math.round(mSavedSpaceKey.height * ratio);
+        }
+        if (mSavedLanguageSwitchKey != null) {
+            mSavedLanguageSwitchKey.y = Math.round(mSavedLanguageSwitchKey.y * ratio);
+            mSavedLanguageSwitchKey.height = Math.round(mSavedLanguageSwitchKey.height * ratio);
+        }
+        int diff = targetHeight - maxBottom;
+        if (diff != 0) {
+            for (Key key : getKeys()) {
+                if (key.y + key.height == maxBottom) {
+                    key.height += diff;
+                }
+            }
+            if (mSavedSpaceKey != null && mSavedSpaceKey.y + mSavedSpaceKey.height == maxBottom) {
+                mSavedSpaceKey.height += diff;
+            }
+            if (mSavedLanguageSwitchKey != null && mSavedLanguageSwitchKey.y + mSavedLanguageSwitchKey.height == maxBottom) {
+                mSavedLanguageSwitchKey.height += diff;
+            }
+        }
+        mTotalHeight = targetHeight;
+    }
+
     @Override
     protected Key createKeyFromXml(Resources res, Row parent, int x, int y, XmlResourceParser parser) {
         Key key = new Key(res, parent, x, y, parser);
-        if (key.codes[0] == Keyboard.KEYCODE_DONE) {
-            mEnterKey = key;
-        } else if (key.codes[0] == 32) {
-            mSpaceKey = key;
-            mSavedSpaceKey = new Key(res, parent, x, y, parser);
-        } else if (key.codes[0] == KEYCODE_LANGUAGE_SWITCH) {
-            mLanguageSwitchKey = key;
-            mSavedLanguageSwitchKey = new Key(res, parent, x, y, parser);
+        if (key.codes != null && key.codes.length > 0) {
+            int code = key.codes[0];
+            if (code < 0 || code == 32) {
+                key.modifier = true;
+            }
+            if (code == Keyboard.KEYCODE_DONE) {
+                mEnterKey = key;
+            } else if (code == 32) {
+                mSpaceKey = key;
+                mSavedSpaceKey = new Key(res, parent, x, y, parser);
+                mSavedSpaceKey.modifier = true;
+            } else if (code == KEYCODE_LANGUAGE_SWITCH) {
+                mLanguageSwitchKey = key;
+                mSavedLanguageSwitchKey = new Key(res, parent, x, y, parser);
+                mSavedLanguageSwitchKey.modifier = true;
+            }
         }
         return key;
     }

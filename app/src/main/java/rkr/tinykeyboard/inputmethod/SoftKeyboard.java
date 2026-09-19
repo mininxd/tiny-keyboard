@@ -210,6 +210,10 @@ public class SoftKeyboard extends InputMethodService
         mSymbolsKeyboard = new LatinKeyboard(displayContext, R.xml.symbols, 0, displayWidth, displayHeight, scale);
         mSymbolsShiftedKeyboard = new LatinKeyboard(displayContext, R.xml.symbols_shift, 0, displayWidth, displayHeight, scale);
 
+        int targetHeight = mQwertyKeyboard.getHeight();
+        mSymbolsKeyboard.forceTotalHeight(targetHeight);
+        mSymbolsShiftedKeyboard.forceTotalHeight(targetHeight);
+
         if (wasSymbolsShifted) {
             mCurKeyboard = mSymbolsShiftedKeyboard;
         } else if (wasSymbols) {
@@ -258,6 +262,7 @@ public class SoftKeyboard extends InputMethodService
             public boolean onTouch(View v, MotionEvent event) {
                 switch (event.getActionMasked()) {
                     case MotionEvent.ACTION_DOWN:
+                        mLastPressedKey = 0;
                         mDownX = event.getX();
                         mDownY = event.getY();
                         mDownRawX = event.getRawX();
@@ -291,7 +296,7 @@ public class SoftKeyboard extends InputMethodService
                         float dy = event.getRawY() - mDownRawY;
                         float density = v.getResources().getDisplayMetrics().density;
 
-                        if (mSpaceSlideEnabled && (mStartedOnSpace || mLastPressedKey == 32 || mIsSpaceSliding)) {
+                        if (mSpaceSlideEnabled && (mStartedOnSpace || mIsSpaceSliding)) {
                             if (mIsSpaceSliding) {
                                 float deltaX = event.getRawX() - mLastSlideX;
                                 mLastSlideX = event.getRawX();
