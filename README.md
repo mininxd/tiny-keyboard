@@ -12,6 +12,8 @@
 
 ## Features
 
+- **Key Popup Preview**: Highlighting popup preview above pressed keys for enhanced typing feedback and UX (toggleable in Settings).
+- **Dedicated Number Row**: Optional number row (`1 2 3 4 5 6 7 8 9 0`) across the top of the keyboard for quick access to digits (toggleable in Settings).
 - **Clipboard Toolbar**: Clean top toolbar with a clipboard button (`📋`) and quick-paste badges for recent copied text to paste in 1 tap, plus a full clipboard history drawer with clear-all (toggleable in Settings).
 - **Spacebar Cursor Slide**: Scroll / slide left and right on the spacebar to move the typing cursor left and right through text with subtle haptic ticks. Includes an adjustable sliding sensitivity slider in Settings.
 - **Lowercase as Default**: Starts and types in lowercase by default, avoiding unwanted auto-capitalization (with an optional auto-capitalization toggle in Settings).

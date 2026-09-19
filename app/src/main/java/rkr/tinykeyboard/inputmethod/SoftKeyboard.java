@@ -77,6 +77,8 @@ public class SoftKeyboard extends InputMethodService
     private static final String PREF_AUTO_CAP = "auto_cap";
     private static final String PREF_SPACE_SLIDE = "space_slide";
     private static final String PREF_SLIDE_SENSITIVITY = "slide_sensitivity";
+    private static final String PREF_KEY_PREVIEW = "key_preview";
+    private static final String PREF_NUMBER_ROW = "number_row";
 
     private InputMethodManager mInputMethodManager;
     private KeyboardView mInputView;
@@ -105,6 +107,8 @@ public class SoftKeyboard extends InputMethodService
     private boolean mAutoCap = false; // default lowercase!
     private boolean mSpaceSlideEnabled = true;
     private int mSlideSensitivity = 50; // 0 to 100
+    private boolean mKeyPreviewEnabled = true;
+    private boolean mNumberRowEnabled = true;
     private int mLastPressedKey = 0;
     
     private LatinKeyboard mSymbolsKeyboard;
@@ -125,6 +129,8 @@ public class SoftKeyboard extends InputMethodService
         mAutoCap = prefs.getBoolean(PREF_AUTO_CAP, false);
         mSpaceSlideEnabled = prefs.getBoolean(PREF_SPACE_SLIDE, true);
         mSlideSensitivity = prefs.getInt(PREF_SLIDE_SENSITIVITY, 50);
+        mKeyPreviewEnabled = prefs.getBoolean(PREF_KEY_PREVIEW, true);
+        mNumberRowEnabled = prefs.getBoolean(PREF_NUMBER_ROW, true);
 
         try {
             mClipboardManager = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
@@ -179,6 +185,8 @@ public class SoftKeyboard extends InputMethodService
 
     @Override public void onInitializeInterface() {
         final Context displayContext = getThemedContext();
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        mNumberRowEnabled = prefs.getBoolean(PREF_NUMBER_ROW, true);
 
         int displayWidth = getMaxWidth();
         int baseHeight = displayContext.getResources().getDisplayMetrics().heightPixels;
@@ -197,7 +205,8 @@ public class SoftKeyboard extends InputMethodService
         boolean wasSymbols = (mCurKeyboard == mSymbolsKeyboard);
         boolean wasSymbolsShifted = (mCurKeyboard == mSymbolsShiftedKeyboard);
 
-        mQwertyKeyboard = new LatinKeyboard(displayContext, R.xml.qwerty, 0, displayWidth, displayHeight, scale);
+        int qwertyRes = mNumberRowEnabled ? R.xml.qwerty_numbers : R.xml.qwerty;
+        mQwertyKeyboard = new LatinKeyboard(displayContext, qwertyRes, 0, displayWidth, displayHeight, scale);
         mSymbolsKeyboard = new LatinKeyboard(displayContext, R.xml.symbols, 0, displayWidth, displayHeight, scale);
         mSymbolsShiftedKeyboard = new LatinKeyboard(displayContext, R.xml.symbols_shift, 0, displayWidth, displayHeight, scale);
 
@@ -219,6 +228,8 @@ public class SoftKeyboard extends InputMethodService
         mAutoCap = prefs.getBoolean(PREF_AUTO_CAP, false);
         mSpaceSlideEnabled = prefs.getBoolean(PREF_SPACE_SLIDE, true);
         mSlideSensitivity = prefs.getInt(PREF_SLIDE_SENSITIVITY, 50);
+        mKeyPreviewEnabled = prefs.getBoolean(PREF_KEY_PREVIEW, true);
+        mNumberRowEnabled = prefs.getBoolean(PREF_NUMBER_ROW, true);
 
         int layoutRes;
         if ("legacy".equals(theme)) {
@@ -231,7 +242,7 @@ public class SoftKeyboard extends InputMethodService
 
         mInputView = (KeyboardView) LayoutInflater.from(context).inflate(layoutRes, null);
         mInputView.setOnKeyboardActionListener(this);
-        mInputView.setPreviewEnabled(false);
+        mInputView.setPreviewEnabled(mKeyPreviewEnabled);
         mInputView.setOnTouchListener(new View.OnTouchListener() {
             private float mDownX;
             private float mDownY;
@@ -788,6 +799,8 @@ public class SoftKeyboard extends InputMethodService
         boolean currentSpaceSlide = prefs.getBoolean(PREF_SPACE_SLIDE, true);
         int currentSlideSensitivity = prefs.getInt(PREF_SLIDE_SENSITIVITY, 50);
         boolean currentClipboardBar = prefs.getBoolean(PREF_CLIPBOARD_BAR, true);
+        boolean currentKeyPreview = prefs.getBoolean(PREF_KEY_PREVIEW, true);
+        boolean currentNumberRow = prefs.getBoolean(PREF_NUMBER_ROW, true);
         int currentHeight = prefs.getInt(PREF_HEIGHT_SCALE, 100);
         final String currentTheme = prefs.getString(PREF_THEME, "legacy");
 
@@ -940,6 +953,24 @@ public class SoftKeyboard extends InputMethodService
         clipboardBarCheck.setChecked(currentClipboardBar);
         layout.addView(clipboardBarCheck);
 
+        final CheckBox keyPreviewCheck = new CheckBox(context);
+        keyPreviewCheck.setText("Key popup preview");
+        keyPreviewCheck.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        keyPreviewCheck.setTextColor(onSurfaceColor);
+        keyPreviewCheck.setMinimumHeight(0);
+        keyPreviewCheck.setPadding(keyPreviewCheck.getPaddingLeft(), (int) (3 * density), keyPreviewCheck.getPaddingRight(), (int) (3 * density));
+        keyPreviewCheck.setChecked(currentKeyPreview);
+        layout.addView(keyPreviewCheck);
+
+        final CheckBox numberRowCheck = new CheckBox(context);
+        numberRowCheck.setText("Number row on top");
+        numberRowCheck.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        numberRowCheck.setTextColor(onSurfaceColor);
+        numberRowCheck.setMinimumHeight(0);
+        numberRowCheck.setPadding(numberRowCheck.getPaddingLeft(), (int) (3 * density), numberRowCheck.getPaddingRight(), (int) (3 * density));
+        numberRowCheck.setChecked(currentNumberRow);
+        layout.addView(numberRowCheck);
+
         final TextView themeLabel = new TextView(context);
         themeLabel.setText("Theme");
         themeLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
@@ -1030,6 +1061,8 @@ public class SoftKeyboard extends InputMethodService
             slideSensBar.setProgressTintList(tint);
             slideSensBar.setThumbTintList(tint);
             clipboardBarCheck.setButtonTintList(tint);
+            keyPreviewCheck.setButtonTintList(tint);
+            numberRowCheck.setButtonTintList(tint);
             legacyBtn.setButtonTintList(tint);
             autoBtn.setButtonTintList(tint);
             lightBtn.setButtonTintList(tint);
@@ -1050,6 +1083,8 @@ public class SoftKeyboard extends InputMethodService
             boolean spaceSlide = spaceSlideCheck.isChecked();
             int slideSensitivity = slideSensBar.getProgress();
             boolean clipboardBar = clipboardBarCheck.isChecked();
+            boolean keyPreview = keyPreviewCheck.isChecked();
+            boolean numberRow = numberRowCheck.isChecked();
             int height = 70 + heightBar.getProgress();
             int checkedThemeId = themeGroup.getCheckedRadioButtonId();
             String selectedTheme = "legacy";
@@ -1072,6 +1107,8 @@ public class SoftKeyboard extends InputMethodService
                 .putBoolean(PREF_SPACE_SLIDE, spaceSlide)
                 .putInt(PREF_SLIDE_SENSITIVITY, slideSensitivity)
                 .putBoolean(PREF_CLIPBOARD_BAR, clipboardBar)
+                .putBoolean(PREF_KEY_PREVIEW, keyPreview)
+                .putBoolean(PREF_NUMBER_ROW, numberRow)
                 .putInt(PREF_HEIGHT_SCALE, height)
                 .putString(PREF_THEME, selectedTheme)
                 .apply();
@@ -1083,6 +1120,8 @@ public class SoftKeyboard extends InputMethodService
             mSpaceSlideEnabled = spaceSlide;
             mSlideSensitivity = slideSensitivity;
             mClipboardBarEnabled = clipboardBar;
+            mKeyPreviewEnabled = keyPreview;
+            mNumberRowEnabled = numberRow;
             mLastDisplayWidth = 0;
             mLastDisplayHeight = 0;
             onInitializeInterface();

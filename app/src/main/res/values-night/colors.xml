@@ -13,4 +13,6 @@
     <color name="key_depth_shadow_active">#00253D</color>
     <color name="key_depth_stroke">#444752</color>
     <color name="m3_key_text_contrast">#FFFFFF</color>
+    <color name="m3_key_preview_bg">#2E3036</color>
+    <color name="m3_key_preview_stroke">#484B54</color>
 </resources>

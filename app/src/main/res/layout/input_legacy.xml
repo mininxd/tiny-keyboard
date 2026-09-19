@@ -24,4 +24,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:keyTextSize="@dimen/key_text_size"
+    android:keyPreviewLayout="@layout/key_preview"
+    android:keyPreviewOffset="-8dp"
+    android:keyPreviewHeight="52dp"
     />

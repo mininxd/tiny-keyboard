@@ -30,4 +30,7 @@
     android:labelTextSize="@dimen/label_text_size"
     android:shadowRadius="0"
     android:shadowColor="@android:color/transparent"
+    android:keyPreviewLayout="@layout/key_preview"
+    android:keyPreviewOffset="-8dp"
+    android:keyPreviewHeight="52dp"
     />
