@@ -55,25 +55,26 @@ jobs:
           DEBUG_APK=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
           cp "$DEBUG_APK" dist/app-debug.apk
 
-          # Find release APK (signed or unsigned)
+          # Find release APK
           RELEASE_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -n 1)
 
-          # If release APK is unsigned, sign it with release.jks
-          if [[ "$RELEASE_APK" == *"unsigned"* ]]; then
-            echo "Signing release APK with release.jks..."
-            BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -n 1)
-            
-            $BUILD_TOOLS_DIR/zipalign -v -p 4 "$RELEASE_APK" dist/app-release-aligned.apk
-            $BUILD_TOOLS_DIR/apksigner sign --ks app/release.jks \
-              --ks-pass pass:android --key-pass pass:android \
-              --out dist/app-release.apk dist/app-release-aligned.apk
-            rm -f dist/app-release-aligned.apk
-          else
-            cp "$RELEASE_APK" dist/app-release.apk
-          fi
+          # Strip metadata files and old signatures
+          zip -d "$RELEASE_APK" "META-INF/com/*" "META-INF/version-control-info.textproto" "META-INF/*.SF" "META-INF/*.RSA" "META-INF/MANIFEST.MF" || true
+
+          # Align
+          $BUILD_TOOLS_DIR/zipalign -f -p 4 "$RELEASE_APK" dist/app-release-aligned.apk
+
+          # Sign with release.jks
+          $BUILD_TOOLS_DIR/apksigner sign --ks app/release.jks \
+            --ks-pass pass:android --key-pass pass:android \
+            --v1-signing-enabled true --v2-signing-enabled true \
+            --out dist/app-release.apk dist/app-release-aligned.apk
+          rm -f dist/app-release-aligned.apk
 
           echo "=== Built APK Sizes ==="
           ls -lh dist/
+          ls -l dist/
 
       - name: Upload APKs as Artifact
         uses: actions/upload-artifact@v4
