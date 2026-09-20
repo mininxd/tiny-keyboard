@@ -45,7 +45,7 @@ jobs:
 
       - name: Build Debug and Release APKs
         run: |
-          gradle assembleDebug assembleRelease --no-daemon
+          gradle build --scan --no-daemon
 
       - name: Prepare and Sign Release APK
         run: |
@@ -62,8 +62,8 @@ jobs:
           # Strip metadata files and old signatures
           zip -d "$RELEASE_APK" "META-INF/com/*" "META-INF/version-control-info.textproto" "META-INF/*.SF" "META-INF/*.RSA" "META-INF/MANIFEST.MF" || true
 
-          # Align
-          $BUILD_TOOLS_DIR/zipalign -f -p 4 "$RELEASE_APK" dist/app-release-aligned.apk
+          # Align with Zopfli recompression for minimal APK size
+          $BUILD_TOOLS_DIR/zipalign -f -z -p 4 "$RELEASE_APK" dist/app-release-aligned.apk
 
           # Sign with release.jks
           $BUILD_TOOLS_DIR/apksigner sign --ks app/release.jks \

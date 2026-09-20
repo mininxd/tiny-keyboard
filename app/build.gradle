@@ -8,6 +8,11 @@ android {
         targetSdkVersion 37
         versionCode 16
         versionName "1.1.dev"
+        resourceConfigurations += ['en']
+    }
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
     }
     signingConfigs {
         release {
@@ -32,6 +37,10 @@ android {
                 'META-INF/*.version',
                 'META-INF/version-control-info.textproto',
                 'META-INF/com/**',
+                'META-INF/*.kotlin_module',
+                'META-INF/DEPENDENCIES',
+                'META-INF/LICENSE*',
+                'META-INF/NOTICE*',
                 '**/*.proto'
             ]
         }

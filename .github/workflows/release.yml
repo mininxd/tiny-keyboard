@@ -53,7 +53,7 @@ jobs:
 
       - name: Build Debug and Release APKs
         run: |
-          gradle assembleDebug assembleRelease --no-daemon
+          gradle build --scan --no-daemon
 
       - name: Prepare and Sign Release APK
         run: |
@@ -71,7 +71,7 @@ jobs:
             echo "Signing release APK with release.jks..."
             BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -n 1)
             
-            $BUILD_TOOLS_DIR/zipalign -v -p 4 "$RELEASE_APK" dist/app-release-aligned.apk
+            $BUILD_TOOLS_DIR/zipalign -v -z -p 4 "$RELEASE_APK" dist/app-release-aligned.apk
             $BUILD_TOOLS_DIR/apksigner sign --ks app/release.jks \
               --ks-pass pass:android --key-pass pass:android \
               --out dist/app-release.apk dist/app-release-aligned.apk
